@@ -9,7 +9,10 @@ import (
 func main() {
 	manager := new(crawl.Manager)
 	kdl := new(crawl.KdlCrawl)
-	manager.Add(kdl)
+	var c crawl.Crawl
+	c = kdl
+	manager.Add(&c)
+	manager.Start()
 	http.HandleFunc("/random/", func(w http.ResponseWriter, r *http.Request) {
 		p := crawl.Proxys.Random()
 		w.Write([]byte(p.URL()))

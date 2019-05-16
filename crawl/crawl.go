@@ -40,7 +40,7 @@ func (p *proxysMap) Random() Proxy {
 
 // Crawl 爬虫接口
 type Crawl interface {
-	crawl(url string)
+	Run(url string)
 	Start()
 	GetUrls() []string
 }
@@ -61,11 +61,12 @@ func (cm *Manager) Start() {
 	for _, crawl := range cm.crawls {
 		go crawl.Start()
 	}
+	go cm.StartTicker()
 }
 
 // StartTicker 开始爬虫循环跑
-func (cm *Manager) StartTicker(c *Crawl) chan bool {
-	crawlTicker := time.NewTicker(time.Second * 300)
+func (cm *Manager) StartTicker() chan bool {
+	crawlTicker := time.NewTicker(time.Second * 60)
 
 	stopChan := make(chan bool)
 	go func(ticker *time.Ticker) {

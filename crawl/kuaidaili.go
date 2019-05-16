@@ -1,8 +1,10 @@
 package crawl
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -15,7 +17,7 @@ type KdlCrawl struct {
 // Start 快代理爬虫
 func (c *KdlCrawl) Start() {
 	for _, url := range c.GetUrls() {
-		go c.crawl(url)
+		go c.Run(url)
 	}
 }
 
@@ -23,23 +25,29 @@ func (c *KdlCrawl) Start() {
 func (c *KdlCrawl) GetUrls() []string {
 	var urls []string
 	for i := 1; i < 3; i++ {
-		urls = append(urls, "https://www.kuaidaili.com/free/inha/"+string(i)+"/")
+		url := "https://www.kuaidaili.com/free/inha/" + strconv.Itoa(i) + "/"
+		urls = append(urls, url)
 	}
 	return urls
 }
 
-func (c *KdlCrawl) crawl(url string) {
-	res, err := http.Get(url)
+// Run 抓起页面
+func (c *KdlCrawl) Run(url string) {
+	fmt.Println(url)
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, strings.NewReader(""))
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/532.5 (KHTML, like Gecko) Chrome/4.0.249.0 Safari/532.5")
+	resp, err := client.Do(req)
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		log.Fatalf("status code error: %d %s", resp.StatusCode, resp.Status)
 	}
 
 	// Load the HTML document
-	doc, err := goquery.NewDocumentFromReader(res.Body)
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -50,4 +58,5 @@ func (c *KdlCrawl) crawl(url string) {
 		proxy.category = strings.ToLower(s.Find("td[data-title='类型']").First().Text())
 		Proxys.Store(proxy.Ip, proxy)
 	})
+	fmt.Println("done ...")
 }
