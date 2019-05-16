@@ -45,17 +45,26 @@ type Crawl interface {
 	GetUrls() []string
 }
 
-type CrawlManger struct {
+// Manger 爬虫管理器
+type Manager struct {
 	crawls []Crawl
 }
 
-func (cm *CrawlManger) Add(c *Crawl) error {
+// Add 添加一个新爬虫
+func (cm *Manager) Add(c *Crawl) error {
 	cm.crawls = append(cm.crawls, *c)
 	return nil
 }
 
-func (cm *CrawlManger) Start() {}
-func (cm *CrawlManger) StartTicker(c *Crawl) chan bool {
+// Start 开始所有爬虫
+func (cm *Manager) Start() {
+	for _, crawl := range cm.crawls {
+		go crawl.Start()
+	}
+}
+
+// StartTicker 开始爬虫循环跑
+func (cm *Manager) StartTicker(c *Crawl) chan bool {
 	crawlTicker := time.NewTicker(time.Second * 300)
 
 	stopChan := make(chan bool)
