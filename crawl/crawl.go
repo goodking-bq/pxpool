@@ -1,12 +1,13 @@
 package crawl
 
 import (
-	"fmt"
+	"errors"
 	"math/rand"
 	"sync"
 	"time"
 )
 
+// Proxy 代理
 type Proxy struct {
 	Ip         string
 	Port       string
@@ -27,25 +28,29 @@ type proxysMap struct {
 // Proxys 所有的代理
 var Proxys proxysMap
 
-func (p *proxysMap) Random() Proxy {
+func (p *proxysMap) Random() (Proxy, error) {
 	var ips []string
 	Proxys.Range(func(k, _ interface{}) bool {
 		ips = append(ips, k.(string))
 		return true
 	})
-	n := rand.Intn(len(ips))
+	l := len(ips)
+	if l == 0 {
+		return Proxy{}, errors.New("没有缓存代理")
+	}
+	n := rand.Intn(l)
 	_p, _ := Proxys.Load(ips[n])
-	return _p.(Proxy)
+	return _p.(Proxy), nil
 }
 
 // Crawl 爬虫接口
 type Crawl interface {
-	Run(url string)
+	Run(url string) error
 	Start()
 	GetUrls() []string
 }
 
-// Manger 爬虫管理器
+// Manager 爬虫管理器
 type Manager struct {
 	crawls []Crawl
 }
@@ -57,11 +62,13 @@ func (cm *Manager) Add(c *Crawl) error {
 }
 
 // Start 开始所有爬虫
-func (cm *Manager) Start() {
+func (cm *Manager) Start(ticker bool) {
 	for _, crawl := range cm.crawls {
 		go crawl.Start()
 	}
-	go cm.StartTicker()
+	if ticker == true {
+		cm.StartTicker()
+	}
 }
 
 // StartTicker 开始爬虫循环跑
@@ -75,11 +82,9 @@ func (cm *Manager) StartTicker() chan bool {
 		for {
 			select {
 			case <-ticker.C:
-				cm.Start()
-				fmt.Println("爬虫开始运行....")
+				cm.Start(false)
 			case stop := <-stopChan:
 				if stop {
-					fmt.Println("Ticker2 Stop")
 					return
 				}
 			}
