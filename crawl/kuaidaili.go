@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -22,6 +23,7 @@ func (c *KdlCrawl) Start() {
 		if err != nil {
 			log.Println(err)
 		}
+		time.Sleep(3 * time.Second)
 	}
 	log.Println("快代理爬虫 运行结束")
 }
