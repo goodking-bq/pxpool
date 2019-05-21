@@ -1,0 +1,13 @@
+// package main
+
+// import (
+// 	"./scanner"
+// )
+
+// func main() {
+// 	//var ports = []int{80, 5000}
+// 	//scanner.ScanIP("127.0.0.1", ports)
+// 	ipScan := scanner.IPForScaner{IP: "193.168.4.101", Ports: []int{8001, 10808}}
+// 	scanner.ScanIP(ipScan)
+// }
+// // 

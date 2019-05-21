@@ -8,11 +8,26 @@ import (
 	"strings"
 	"time"
 
+	"../model"
+
 	"github.com/PuerkitoBio/goquery"
 )
 
 // KdlCrawl 快代理
 type KdlCrawl struct {
+	Name string
+}
+
+// NewKdlCrawl 创建
+func NewKdlCrawl() *KdlCrawl {
+	return &KdlCrawl{Name: "kdl"}
+}
+
+// ToCrawl 创建
+func (c *KdlCrawl) ToCrawl() *Crawl {
+	var i Crawl
+	i = c
+	return &i
 }
 
 // Start 快代理爬虫
@@ -28,7 +43,7 @@ func (c *KdlCrawl) Start() {
 	log.Println("快代理爬虫 运行结束")
 }
 
-// GetUrls 链接
+// GetUrls 链接    GetUrls() []string
 func (c *KdlCrawl) GetUrls() []string {
 	var urls []string
 	for i := 1; i < 3; i++ {
@@ -61,11 +76,20 @@ func (c *KdlCrawl) Run(url string) error {
 		return err
 	}
 	doc.Find("tbody tr").Each(func(i int, s *goquery.Selection) {
-		var proxy Proxy
+		var proxy model.Proxy
 		proxy.Ip = s.Find("td[data-title='IP']").First().Text()
 		proxy.Port = s.Find("td[data-title='PORT']").First().Text()
-		proxy.category = strings.ToLower(s.Find("td[data-title='类型']").First().Text())
-		Proxys.Store(proxy.Ip, proxy)
+		proxy.Category = strings.ToLower(s.Find("td[data-title='类型']").First().Text())
+		model.Proxys.Store(proxy.Ip, proxy)
 	})
+	return nil
+}
+
+func (c *KdlCrawl) GetName() string {
+	return c.Name
+}
+
+func (c *KdlCrawl) SetName(n string) error {
+	c.Name = n
 	return nil
 }
