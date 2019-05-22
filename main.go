@@ -1,11 +1,6 @@
 package main
 
 import (
-	"os"
-
-	"github.com/urfave/cli"
-)
-
 func main() {
 	pxApp := cli.NewApp()
 	pxApp.Name = "代理扫描工具"
@@ -21,4 +16,5 @@ func main() {
 		},
 	}
 	pxApp.Run(os.Args)
+
 }
