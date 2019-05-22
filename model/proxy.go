@@ -1,7 +1,6 @@
 package model
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -9,31 +8,49 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	"golang.org/x/net/proxy"
+	bolt "go.etcd.io/bbolt"
+	nproxy "golang.org/x/net/proxy"
 )
 
 // Proxy 代理
 type Proxy struct {
-	Ip         string
+	ID         string
+	Host       string
 	Port       string
 	Category   string
-	joinTime   string
-	verifyTime string
-}
-
-// URL 获取代理的地址
-func (p *Proxy) URL() string {
-	return p.Category + "://" + p.Ip + ":" + p.Port
+	JoinTime   string
+	VerifyTime string
 }
 
 // CheckProxy 检查代理是否可用
 func CheckProxy(p *Proxy) bool {
 	return p.check()
 }
+
+// NewProxy 创建新的
+func NewProxy(host, port, category string) *Proxy {
+	return &Proxy{
+		Host:       host,
+		Port:       port,
+		Category:   category,
+		JoinTime:   time.Now().String(),
+		VerifyTime: time.Now().String(),
+	}
+}
+
+// URL 获取代理的地址
+func (p *Proxy) URL() string {
+	return p.Category + "://" + p.Host + ":" + p.Port
+}
+
+func (p *Proxy) Key() string {
+	return p.Host + ":" + p.Port
+}
+
 func (p *Proxy) check() bool {
 	netTransport := &http.Transport{}
 	if strings.ToLower(p.Category) == "http" || strings.ToLower(p.Category) == "https" {
@@ -52,7 +69,7 @@ func (p *Proxy) check() bool {
 		netTransport.ResponseHeaderTimeout = time.Second * time.Duration(5) //数据收发5秒超时
 
 	} else {
-		dialer, err := proxy.SOCKS5("tcp", p.Ip+":"+p.Port, nil, proxy.Direct)
+		dialer, err := nproxy.SOCKS5("tcp", p.Host+":"+p.Port, nil, nproxy.Direct)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "can't connect to the proxy:", err)
 			os.Exit(1)
@@ -83,36 +100,85 @@ func (p *Proxy) check() bool {
 	return true
 }
 
-type proxysMap struct {
-	sync.Map
-}
-
-// Proxys 所有的代理
-var Proxys proxysMap
-
-func (p *proxysMap) Random() (Proxy, error) {
-	var ips []string
-	Proxys.Range(func(k, _ interface{}) bool {
-		ips = append(ips, k.(string))
-		return true
-	})
-	l := len(ips)
-	if l == 0 {
-		return Proxy{}, errors.New("没有缓存代理")
-	}
-	n := rand.Intn(l)
-	_p, _ := Proxys.Load(ips[n])
-	return _p.(Proxy), nil
-}
-func (p *proxysMap) Check() {
-	log.Println("开始检查 。。。")
-	Proxys.Range(func(k, v interface{}) bool {
-		px := v.(Proxy)
-		isActive := px.check()
-		if !isActive {
-			Proxys.Delete(k)
+// Save 保存到db
+func (p *Proxy) Save() error {
+	var proxyID string
+	if err := Storage.db.Update(func(tx *bolt.Tx) error {
+		bProxys, err := tx.CreateBucketIfNotExists([]byte("proxys"))
+		if err != nil {
+			return err
 		}
-		return true
-	})
+		if p.ID == "" {
+			_id, err := bProxys.NextSequence()
+			proxyID = strconv.FormatUint(_id, 10)
+			if err != nil {
+				return err
+			}
+			p.ID = proxyID
+		} else {
+			proxyID = p.ID
+		}
+		bProxy, err := bProxys.CreateBucketIfNotExists([]byte(proxyID))
+		if err != nil {
+			return err
+		}
+		return p.MarshalBucket(bProxy)
+	}); err != nil {
+		return err
+	}
 
+	log.Printf("save %s success", p.Host)
+	return nil
+}
+
+func (p *Proxy) MarshalBucket(bucket *bolt.Bucket) error {
+	bucket.Put([]byte("id"), []byte(p.ID))
+	bucket.Put([]byte("host"), []byte(p.Host))
+	bucket.Put([]byte("post"), []byte(p.Port))
+	bucket.Put([]byte("category"), []byte(p.Category))
+	bucket.Put([]byte("jointime"), []byte(p.JoinTime))
+	bucket.Put([]byte("verifytime"), []byte(p.VerifyTime))
+	return nil
+}
+
+func (p *Proxy) UnMarshalBucket(bucket *bolt.Bucket) error {
+	str := string(bucket.Get([]byte("id")))
+	p.ID = str
+	p.Host = string(bucket.Get([]byte("host")))
+	p.Port = string(bucket.Get([]byte("post")))
+	p.Category = string(bucket.Get([]byte("category")))
+	p.JoinTime = string(bucket.Get([]byte("jointime")))
+	p.VerifyTime = string(bucket.Get([]byte("verifytime")))
+	return nil
+}
+
+// ProxyStory 代理管理器
+type ProxyStory struct {
+}
+
+//GetProxyStory huoqu
+func GetProxyStory() *ProxyStory {
+	return &ProxyStory{}
+}
+
+// Random 随机获取
+func (p *ProxyStory) Random() (*Proxy, error) {
+	var l int64
+	var proxy = new(Proxy)
+	if err := Storage.db.View(func(tx *bolt.Tx) error {
+		bProxys := tx.Bucket([]byte("proxys"))
+		bProxys.ForEach(func(k, v []byte) error {
+			l++
+			return nil
+		})
+		n := rand.Int63n(l)
+		nString := strconv.FormatInt(n, 10)
+		nbyte := []byte(nString)
+		bProxy := bProxys.Bucket(nbyte)
+		return proxy.UnMarshalBucket(bProxy)
+	}); err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	return proxy, nil
 }

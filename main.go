@@ -1,13 +1,24 @@
 package main
 
 import (
-	"./crawl"
-	"./web"
+	"os"
+
+	"github.com/urfave/cli"
 )
 
 func main() {
-	crawlManager := crawl.NewDefaultManager()
-	crawlManager.Start()
-	api := web.NewDefaultAPI()
-	api.Run("", 3000)
+	pxApp := cli.NewApp()
+	pxApp.Name = "代理扫描工具"
+	pxApp.Version = "0.1"
+	pxApp.Usage = "代理站全功能"
+	pxApp.Commands = []cli.Command{
+		{
+			Name:  "web",
+			Usage: "启动webapi",
+			Flags: []cli.Flag{
+				
+			}
+		},
+	}
+	pxApp.Run(os.Args)
 }

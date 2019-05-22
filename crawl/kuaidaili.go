@@ -76,11 +76,11 @@ func (c *KdlCrawl) Run(url string) error {
 		return err
 	}
 	doc.Find("tbody tr").Each(func(i int, s *goquery.Selection) {
-		var proxy model.Proxy
-		proxy.Ip = s.Find("td[data-title='IP']").First().Text()
-		proxy.Port = s.Find("td[data-title='PORT']").First().Text()
-		proxy.Category = strings.ToLower(s.Find("td[data-title='类型']").First().Text())
-		model.Proxys.Store(proxy.Ip, proxy)
+		proxy := model.NewProxy(s.Find("td[data-title='IP']").First().Text(),
+			s.Find("td[data-title='PORT']").First().Text(),
+			strings.ToLower(s.Find("td[data-title='类型']").First().Text()),
+		)
+		proxy.Save()
 	})
 	return nil
 }

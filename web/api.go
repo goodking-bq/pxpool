@@ -21,7 +21,7 @@ func NewDefaultAPI() *API {
 // Run 启动api
 func (api *API) Run(bind string, port int) {
 	http.HandleFunc("/random/", func(w http.ResponseWriter, r *http.Request) {
-		p, err := model.Proxys.Random()
+		p, err := model.GetProxyStory().Random()
 		if err != nil {
 			w.Write([]byte("err"))
 		} else {
