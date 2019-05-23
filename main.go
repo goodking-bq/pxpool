@@ -3,6 +3,9 @@ package main
 import (
 	"os"
 
+	"./crawl"
+	"./storage"
+
 	"github.com/urfave/cli"
 )
 
@@ -11,6 +14,7 @@ func main() {
 	pxApp.Name = "代理扫描工具"
 	pxApp.Version = "0.1"
 	pxApp.Usage = "代理站全功能"
+	//pxApp.UsageText = "什么什么"
 	pxApp.Commands = []cli.Command{
 		{
 			Name:  "web",
@@ -30,6 +34,12 @@ func main() {
 			Name:  "crawl",
 			Usage: "启动爬虫进程",
 			Flags: []cli.Flag{},
+			Action: func(c *cli.Context) {
+				storage := storage.GetStorage("bolt")
+				cManager := crawl.NewDefaultManager(storage)
+				ch := cManager.StartAndTicker()
+				<-ch
+			},
 		},
 		{
 			Name:  "scanner",
@@ -40,6 +50,11 @@ func main() {
 			Usage: "启动所有",
 		},
 	}
+	pxApp.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "config",
+			Usage: "配置文件",
+		},
+	}
 	pxApp.Run(os.Args)
-
 }

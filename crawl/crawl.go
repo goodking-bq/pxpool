@@ -2,6 +2,9 @@ package crawl
 
 import (
 	"time"
+
+	"../model"
+	"../storage"
 )
 
 type crawl struct {
@@ -20,20 +23,24 @@ type Crawl interface {
 
 // Manager 爬虫管理器
 type Manager struct {
-	crawls map[string]*Crawl
+	crawls   map[string]*Crawl
+	storage  *storage.Storager
+	DataChan chan *model.Proxy // 数据交换用
+	exit     chan bool         // 退出信号
 }
 
 // NewManager 创建Manager
-func NewManager() *Manager {
-	return &Manager{crawls: make(map[string]*Crawl)}
+func NewManager(storage *storage.Storager) *Manager {
+	return &Manager{crawls: make(map[string]*Crawl), storage: storage, DataChan: make(chan *model.Proxy), exit: make(chan bool)}
 }
 
 // NewDefaultManager 创建Manager
-func NewDefaultManager() *Manager {
+func NewDefaultManager(storage *storage.Storager) *Manager {
 	crawls := make(map[string]*Crawl)
-	kdl := NewKdlCrawl().ToCrawl()
+	DataChan := make(chan *model.Proxy)
+	kdl := NewKdlCrawl(DataChan).ToCrawl()
 	crawls[(*kdl).GetName()] = kdl
-	return &Manager{crawls: crawls}
+	return &Manager{crawls: crawls, storage: storage, DataChan: DataChan, exit: make(chan bool)}
 }
 
 // Add 添加一个新爬虫
@@ -46,6 +53,9 @@ func (cm *Manager) Add(c *Crawl) error {
 func (cm *Manager) Start() {
 	for _, crawl := range cm.crawls {
 		go (*crawl).Start()
+	}
+	for proxy := range cm.DataChan {
+		(*cm.storage).AddOrUpdateProxy(proxy)
 	}
 }
 
@@ -62,6 +72,7 @@ func (cm *Manager) StartTicker() chan bool {
 				cm.Start()
 			case stop := <-stopChan:
 				if stop {
+					close(cm.DataChan)
 					return
 				}
 			}

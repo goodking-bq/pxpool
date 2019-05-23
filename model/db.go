@@ -50,4 +50,3 @@ func (story *Story) ShowAll(b string) {
 }
 
 // Storage 村粗
-var Storage = GetStory()

@@ -1,25 +1,29 @@
 package storage
 
-import "../model"
+import (
+	"../model"
+)
 
-// Storage 接口
-type Storage interface {
-	Get() *interface{}
+// Storager 接口
+type Storager interface {
+	//Get() *interface{}
 	AddOrUpdateProxy(p *model.Proxy) error
-	GetProxyByHost(s string) *model.Proxy
+	GetProxyByHost(host string) *model.Proxy
 	RandomProxy() *model.Proxy
-	Write(p *model.Proxy) error
-	Read(p interface{}) *model.Proxy
+	//Write(p *model.Proxy) error
+	//Read(p interface{}) *model.Proxy
 }
 
 // GetStorage 获取存储
-func GetStorage(storageType string) *Storage {
-	var storage Storage
+func GetStorage(storageType string) *Storager {
+	var storage Storager
 	switch storageType {
 	case "bolt":
-		storage = *GetBoltStorage(".")
+		bolt := GetBoltStorage(".")
+		storage = bolt
+		break
 	default:
 		return nil
 	}
-	return storage
+	return &storage
 }

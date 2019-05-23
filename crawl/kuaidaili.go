@@ -15,12 +15,13 @@ import (
 
 // KdlCrawl 快代理
 type KdlCrawl struct {
-	Name string
+	Name     string
+	DataChan chan *model.Proxy
 }
 
 // NewKdlCrawl 创建
-func NewKdlCrawl() *KdlCrawl {
-	return &KdlCrawl{Name: "kdl"}
+func NewKdlCrawl(DataChan chan *model.Proxy) *KdlCrawl {
+	return &KdlCrawl{Name: "kdl", DataChan: DataChan}
 }
 
 // ToCrawl 创建
@@ -80,7 +81,7 @@ func (c *KdlCrawl) Run(url string) error {
 			s.Find("td[data-title='PORT']").First().Text(),
 			strings.ToLower(s.Find("td[data-title='类型']").First().Text()),
 		)
-		proxy.Save()
+		c.DataChan <- proxy
 	})
 	return nil
 }
