@@ -24,12 +24,12 @@ func (scanner *Scanner) ScanIP(ipc Address) {
 		if err != nil {
 			fmt.Printf("%s:%d close\n", ipc.IP, port)
 		} else {
-			px := &model.Proxy{Ip: ipc.IP.String(), Port: fmt.Sprintf("%d", port), Category: "http"}
+			px := &model.Proxy{Host: ipc.IP.String(), Port: fmt.Sprintf("%d", port), Category: "http"}
 			if model.CheckProxy(px) {
 				fmt.Printf("%s:%d open ,and is a http proxy \n", ipc.IP, port)
 				continue
 			}
-			if model.CheckProxy(&model.Proxy{Ip: ipc.IP.String(), Port: fmt.Sprintf("%d", port), Category: "socks5"}) {
+			if model.CheckProxy(&model.Proxy{Host: ipc.IP.String(), Port: fmt.Sprintf("%d", port), Category: "socks5"}) {
 				fmt.Printf("%s:%d open ,and is a socks5 proxy \n", ipc.IP, port)
 				continue
 			}

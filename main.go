@@ -5,6 +5,7 @@ import (
 
 	"./crawl"
 	"./storage"
+	"./web"
 
 	"github.com/urfave/cli"
 )
@@ -29,6 +30,12 @@ func main() {
 					Usage: "端口",
 				},
 			},
+			Action: func(c *cli.Context) error {
+				storage := storage.GetStorage("bolt")
+				api := web.NewDefaultAPI(*storage)
+				api.Run("", 3000)
+				return nil
+			},
 		},
 		{
 			Name:  "crawl",
@@ -37,7 +44,7 @@ func main() {
 			Action: func(c *cli.Context) {
 				storage := storage.GetStorage("bolt")
 				cManager := crawl.NewDefaultManager(storage)
-				cManager.StartAndTicker()
+				cManager.Start()
 				cManager.ExitSignal <- true
 			},
 		},

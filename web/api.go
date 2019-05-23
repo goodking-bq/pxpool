@@ -4,25 +4,26 @@ import (
 	"fmt"
 	"net/http"
 
-	"../model"
+	"../storage"
 )
 
 // API somethiing
 type API struct {
-	bind string
-	port int
+	bind    string
+	port    int
+	storage storage.Storager
 }
 
 // NewDefaultAPI 默认
-func NewDefaultAPI() *API {
-	return &API{bind: "", port: 3000}
+func NewDefaultAPI(storage storage.Storager) *API {
+	return &API{bind: "", port: 3000, storage: storage}
 }
 
 // Run 启动api
 func (api *API) Run(bind string, port int) {
 	http.HandleFunc("/random/", func(w http.ResponseWriter, r *http.Request) {
-		p, err := model.GetProxyStory().Random()
-		if err != nil {
+		p := api.storage.RandomProxy()
+		if p == nil {
 			w.Write([]byte("err"))
 		} else {
 			w.Write([]byte(p.URL()))

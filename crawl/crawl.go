@@ -15,7 +15,7 @@ type crawl struct {
 // Crawl 爬虫接口
 type Crawl interface {
 	Run(url string) error
-	Start()
+	Start() // 开始怕去县城
 	GetUrls() []string
 	GetName() string
 	SetName(n string) error
@@ -50,15 +50,31 @@ func (cm *Manager) Add(c *Crawl) error {
 	return nil
 }
 
-// Start 开始所有爬虫
-func (cm *Manager) Start() {
+func (cm *Manager) Save() { // 开始接受
+	for {
+		select {
+		case proxy := <-cm.DataChan:
+			go (*cm.storage).AddOrUpdateProxy(proxy)
+		case stop := <-cm.ExitSignal:
+			if stop {
+				close(cm.DataChan)
+				return
+			}
+		}
+	}
+
+}
+
+// Crawl 开始所有爬虫
+func (cm *Manager) Crawl() {
 	for _, crawl := range cm.crawls {
 		go (*crawl).Start()
 	}
-	for proxy := range cm.DataChan {
-		go (*cm.storage).AddOrUpdateProxy(proxy)
-		if stop<-cm.ExitSignal
-	}
+}
+
+func (cm *Manager) Start() {
+	cm.Crawl()
+	cm.Save()
 }
 
 // StartTicker 开始爬虫循环跑
@@ -84,7 +100,7 @@ func (cm *Manager) StartTicker() {
 
 // StartAndTicker 开始并定时执行
 func (cm *Manager) StartAndTicker() {
-	cm.Start()
-	log.Println("爬虫60秒后再次运行")
+	cm.Crawl()
 	cm.StartTicker()
+	cm.Save()
 }
