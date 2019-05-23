@@ -37,8 +37,8 @@ func main() {
 			Action: func(c *cli.Context) {
 				storage := storage.GetStorage("bolt")
 				cManager := crawl.NewDefaultManager(storage)
-				ch := cManager.StartAndTicker()
-				<-ch
+				cManager.StartAndTicker()
+				cManager.ExitSignal <- true
 			},
 		},
 		{

@@ -1,6 +1,7 @@
 package crawl
 
 import (
+	"log"
 	"time"
 
 	"../model"
@@ -23,15 +24,15 @@ type Crawl interface {
 
 // Manager 爬虫管理器
 type Manager struct {
-	crawls   map[string]*Crawl
-	storage  *storage.Storager
-	DataChan chan *model.Proxy // 数据交换用
-	exit     chan bool         // 退出信号
+	crawls     map[string]*Crawl
+	storage    *storage.Storager
+	DataChan   chan *model.Proxy // 数据交换用
+	ExitSignal chan bool         // 退出信号
 }
 
 // NewManager 创建Manager
 func NewManager(storage *storage.Storager) *Manager {
-	return &Manager{crawls: make(map[string]*Crawl), storage: storage, DataChan: make(chan *model.Proxy), exit: make(chan bool)}
+	return &Manager{crawls: make(map[string]*Crawl), storage: storage, DataChan: make(chan *model.Proxy), ExitSignal: make(chan bool)}
 }
 
 // NewDefaultManager 创建Manager
@@ -40,7 +41,7 @@ func NewDefaultManager(storage *storage.Storager) *Manager {
 	DataChan := make(chan *model.Proxy)
 	kdl := NewKdlCrawl(DataChan).ToCrawl()
 	crawls[(*kdl).GetName()] = kdl
-	return &Manager{crawls: crawls, storage: storage, DataChan: DataChan, exit: make(chan bool)}
+	return &Manager{crawls: crawls, storage: storage, DataChan: DataChan, ExitSignal: make(chan bool)}
 }
 
 // Add 添加一个新爬虫
@@ -55,14 +56,15 @@ func (cm *Manager) Start() {
 		go (*crawl).Start()
 	}
 	for proxy := range cm.DataChan {
-		(*cm.storage).AddOrUpdateProxy(proxy)
+		go (*cm.storage).AddOrUpdateProxy(proxy)
+		if stop<-cm.ExitSignal
 	}
 }
 
 // StartTicker 开始爬虫循环跑
-func (cm *Manager) StartTicker() chan bool {
+func (cm *Manager) StartTicker() {
+	log.Println("爬虫60秒后再次运行")
 	crawlTicker := time.NewTicker(time.Second * 60)
-	stopChan := make(chan bool)
 	go func(ticker *time.Ticker) {
 		defer ticker.Stop()
 
@@ -70,7 +72,7 @@ func (cm *Manager) StartTicker() chan bool {
 			select {
 			case <-ticker.C:
 				cm.Start()
-			case stop := <-stopChan:
+			case stop := <-cm.ExitSignal:
 				if stop {
 					close(cm.DataChan)
 					return
@@ -78,11 +80,11 @@ func (cm *Manager) StartTicker() chan bool {
 			}
 		}
 	}(crawlTicker)
-	return stopChan
 }
 
 // StartAndTicker 开始并定时执行
-func (cm *Manager) StartAndTicker() chan bool {
+func (cm *Manager) StartAndTicker() {
 	cm.Start()
-	return cm.StartTicker()
+	log.Println("爬虫60秒后再次运行")
+	cm.StartTicker()
 }
