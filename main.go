@@ -1,14 +1,47 @@
 package main
 
 import (
+	"context"
 	"os"
+	"pxpool/scanner"
 
-	"./crawl"
-	"./storage"
-	"./web"
+	"pxpool/crawler"
+	"pxpool/models"
+	"pxpool/storage"
+	"pxpool/web"
 
 	"github.com/urfave/cli"
 )
+
+// WebAction web 动作
+func WebAction(c *cli.Context) error {
+	config := models.DefaultConfig()
+	config.UnmarshalCtx(c)
+	ctx, cancal := context.WithCancel(context.Background())
+	defer cancal()
+	storage := storage.GetStorage(config)
+	api := web.DefaultAPI(*storage)
+	api.Run(ctx, config)
+	return nil
+}
+
+// ScanAction scan 动作
+func ScanAction(c *cli.Context) error {
+	config := models.ConfigFromCtx(c)
+	ctx, cancal := context.WithCancel(context.Background())
+	defer cancal()
+	dataChan := make(chan *models.Proxy)
+	scanner := scanner.NewScanner()
+	go scanner.Scan(ctx, config, dataChan)
+	storager := storage.GetStorage(config)
+	storage.StartStorage(ctx, storager, dataChan)
+	// exit := make(chan os.Signal)
+	// signal.Notify(exit, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGKILL)
+	// signal := <-exit
+	// cancal()
+	// log.Println(signal)
+	return nil
+}
 
 func main() {
 	pxApp := cli.NewApp()
@@ -16,6 +49,7 @@ func main() {
 	pxApp.Version = "0.1"
 	pxApp.Usage = "代理站全功能"
 	//pxApp.UsageText = "什么什么"
+
 	pxApp.Commands = []cli.Command{
 		{
 			Name:  "web",
@@ -30,27 +64,36 @@ func main() {
 					Usage: "端口",
 				},
 			},
-			Action: func(c *cli.Context) error {
-				storage := storage.GetStorage("bolt")
-				api := web.NewDefaultAPI(*storage)
-				api.Run("", 3000)
-				return nil
-			},
+			Action: WebAction,
 		},
 		{
 			Name:  "crawl",
 			Usage: "启动爬虫进程",
 			Flags: []cli.Flag{},
 			Action: func(c *cli.Context) {
-				storage := storage.GetStorage("bolt")
-				cManager := crawl.NewDefaultManager(storage)
+				config := models.DefaultConfig()
+				storage := storage.GetStorage(config)
+				DataChan := make(chan *models.Proxy)
+				cManager := crawler.NewDefaultCrawl(storage, DataChan)
 				cManager.Start()
 				cManager.ExitSignal <- true
 			},
 		},
 		{
-			Name:  "scanner",
+			Name:  "scan",
 			Usage: "启动代理扫描",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "scanfile",
+					Usage: "",
+					Value: "scan.txt",
+				},
+				cli.StringFlag{
+					Name:  "cidr",
+					Usage: "",
+				},
+			},
+			Action: ScanAction,
 		},
 		{
 			Name:  "all",
@@ -59,8 +102,12 @@ func main() {
 	}
 	pxApp.Flags = []cli.Flag{
 		cli.StringFlag{
-			Name:  "config",
-			Usage: "配置文件",
+			Name:  "config,c",
+			Usage: "配置文件路径",
+		},
+		cli.StringFlag{
+			Name:  "datapath,d",
+			Usage: "数据文件目录",
 		},
 	}
 	pxApp.Run(os.Args)

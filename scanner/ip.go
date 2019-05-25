@@ -13,7 +13,7 @@ var PORTS = []int{80, 8080, 3128, 8081, 9080, 10808}
 
 // Address 扫描的ip
 type Address struct {
-	IP    *net.IP
+	IP    string
 	Ports []int
 }
 
@@ -38,10 +38,13 @@ func (ads *Addresses) UnmarshalCidrText(cidr []byte) error {
 	if err != nil {
 		return err
 	}
-	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); inc(ip) {
-		*ads = append(*ads, Address{IP: &ip, Ports: PORTS})
+	for IP := ip.Mask(ipnet.Mask); ipnet.Contains(IP); inc(IP) {
+		//IP := net.IP([]byte(ip.String()))
+
+		addr := Address{IP: IP.String(), Ports: PORTS}
+		*ads = append(*ads, addr)
 	}
-	print(*ads)
+	*ads = (*ads)[1 : len(*ads)-1]
 	return nil
 }
 

@@ -1,10 +1,12 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
-	"../storage"
+	"pxpool/models"
+	"pxpool/storage"
 )
 
 // API somethiing
@@ -14,13 +16,13 @@ type API struct {
 	storage storage.Storager
 }
 
-// NewDefaultAPI 默认
-func NewDefaultAPI(storage storage.Storager) *API {
+// DefaultAPI 默认
+func DefaultAPI(storage storage.Storager) *API {
 	return &API{bind: "", port: 3000, storage: storage}
 }
 
 // Run 启动api
-func (api *API) Run(bind string, port int) {
+func (api *API) Run(ctx context.Context, config *models.Config) {
 	http.HandleFunc("/random/", func(w http.ResponseWriter, r *http.Request) {
 		p := api.storage.RandomProxy()
 		if p == nil {
@@ -31,5 +33,5 @@ func (api *API) Run(bind string, port int) {
 
 	})
 	//监听3000端口
-	http.ListenAndServe(fmt.Sprintf("%s:%d", bind, port), nil)
+	http.ListenAndServe(fmt.Sprintf("%s:%d", config.Web.Bind, config.Web.Port), nil)
 }

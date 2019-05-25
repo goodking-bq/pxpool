@@ -8,7 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"../model"
+	"pxpool/models"
+
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -29,7 +30,7 @@ func GetBoltStorage(path string) *Bolt {
 }
 
 // AddOrUpdateProxy 添加或更新
-func (b *Bolt) AddOrUpdateProxy(p *model.Proxy) error {
+func (b *Bolt) AddOrUpdateProxy(p *models.Proxy) error {
 	err := b.db.Update(func(tx *bolt.Tx) error {
 		proxy := b.GetProxyByHost(p.Host)
 		if proxy == nil { //没有新建
@@ -56,8 +57,8 @@ func (b *Bolt) AddOrUpdateProxy(p *model.Proxy) error {
 }
 
 // GetProxyByHost 更加host查找proxy
-func (b *Bolt) GetProxyByHost(host string) *model.Proxy {
-	proxy := &model.Proxy{}
+func (b *Bolt) GetProxyByHost(host string) *models.Proxy {
+	proxy := &models.Proxy{}
 	var has bool
 	if err := b.db.View(func(tx *bolt.Tx) error {
 		bProxys, err := tx.CreateBucketIfNotExists([]byte("proxys"))
@@ -84,7 +85,7 @@ func (b *Bolt) GetProxyByHost(host string) *model.Proxy {
 }
 
 // BucketToProxy 赋值
-func (b *Bolt) BucketToProxy(bp *bolt.Bucket, p *model.Proxy) error {
+func (b *Bolt) BucketToProxy(bp *bolt.Bucket, p *models.Proxy) error {
 	id := string(bp.Get([]byte("ID")))
 	log.Println(id)
 	p.ID = string(bp.Get([]byte("ID")))
@@ -97,7 +98,7 @@ func (b *Bolt) BucketToProxy(bp *bolt.Bucket, p *model.Proxy) error {
 }
 
 // ProxyToBucket 导出到
-func (b *Bolt) ProxyToBucket(p *model.Proxy, bp *bolt.Bucket) error {
+func (b *Bolt) ProxyToBucket(p *models.Proxy, bp *bolt.Bucket) error {
 	bp.Put([]byte("ID"), []byte(p.ID))
 	bp.Put([]byte("Host"), []byte(p.Host))
 	bp.Put([]byte("Category"), []byte(p.Category))
@@ -108,11 +109,14 @@ func (b *Bolt) ProxyToBucket(p *model.Proxy, bp *bolt.Bucket) error {
 }
 
 // RandomProxy 随机
-func (b *Bolt) RandomProxy() *model.Proxy {
+func (b *Bolt) RandomProxy() *models.Proxy {
 	var l int64
-	var proxy = new(model.Proxy)
-	if err := b.db.View(func(tx *bolt.Tx) error {
-		bProxys := tx.Bucket([]byte("proxys"))
+	var proxy = new(models.Proxy)
+	if err := b.db.Update(func(tx *bolt.Tx) error {
+		bProxys, err := tx.CreateBucketIfNotExists([]byte("proxys"))
+		if err != nil {
+			return err
+		}
 		bProxys.ForEach(func(k, v []byte) error {
 			l++
 			return nil
