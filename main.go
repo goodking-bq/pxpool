@@ -31,7 +31,7 @@ func ScanAction(c *cli.Context) error {
 	ctx, cancal := context.WithCancel(context.Background())
 	defer cancal()
 	dataChan := make(chan *models.Proxy)
-	scanner := scanner.NewScanner()
+	scanner := scanner.NewScanner(config)
 	go scanner.Scan(ctx, config, dataChan)
 	storager := storage.GetStorage(config)
 	storage.StartStorage(ctx, storager, dataChan)
@@ -90,7 +90,12 @@ func main() {
 				},
 				cli.StringFlag{
 					Name:  "cidr",
-					Usage: "",
+					Usage: "ru 172.0.0.1/24",
+				},
+				cli.IntFlag{
+					Name:  "concurrency,C",
+					Usage: "扫描进程数",
+					Value: 100,
 				},
 			},
 			Action: ScanAction,

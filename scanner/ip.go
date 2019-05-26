@@ -13,8 +13,8 @@ var PORTS = []int{80, 8080, 3128, 8081, 9080, 10808}
 
 // Address 扫描的ip
 type Address struct {
-	IP    string
-	Ports []int
+	IP   string
+	Port int
 }
 
 // Addresses 列表
@@ -26,9 +26,9 @@ func NewAddresses() *Addresses {
 }
 
 // SetPorts 设置端口
-func (ads *Addresses) SetPorts(ports []int) {
+func (ads *Addresses) SetPorts(port int) {
 	for _, address := range *ads {
-		address.Ports = ports
+		address.Port = port
 	}
 }
 
@@ -40,11 +40,13 @@ func (ads *Addresses) UnmarshalCidrText(cidr []byte) error {
 	}
 	for IP := ip.Mask(ipnet.Mask); ipnet.Contains(IP); inc(IP) {
 		//IP := net.IP([]byte(ip.String()))
+		for port := range PORTS {
+			addr := Address{IP: IP.String(), Port: port}
+			*ads = append(*ads, addr)
+		}
 
-		addr := Address{IP: IP.String(), Ports: PORTS}
-		*ads = append(*ads, addr)
 	}
-	*ads = (*ads)[1 : len(*ads)-1]
+	*ads = (*ads)[len(PORTS) : len(*ads)-len(PORTS)]
 	return nil
 }
 

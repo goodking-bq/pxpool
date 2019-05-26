@@ -16,41 +16,46 @@ import (
 type Scanner struct {
 	IPcount   int
 	ScanCount int
+	Doing     int
+	DoChan    chan bool
 	Chan      chan Address
 }
 
-func NewScanner() *Scanner {
+func NewScanner(config *models.Config) *Scanner {
 	return &Scanner{
-		Chan: make(chan Address, 2),
+		Chan:   make(chan Address),
+		DoChan: make(chan bool, config.Scanner.MaxConcurrency),
 	}
 }
 
 // ScanIP 扫描 ip端口
 func (scanner *Scanner) ScanIP(ipc Address, dataChan chan *models.Proxy) {
 	var nip net.IP
-	nip.UnmarshalText([]byte(ipc.IP))
-	d := net.Dialer{Timeout: 5 * time.Second}
-	for _, port := range ipc.Ports {
-		tcpaddr := &net.TCPAddr{IP: nip, Port: port}
-		_, err := d.Dial("tcp", tcpaddr.String())
-		if err != nil {
-			fmt.Printf("%s:%d close\n", ipc.IP, port)
-		} else {
-			px := &models.Proxy{Host: ipc.IP, Port: fmt.Sprintf("%d", port), Category: "http"}
+	err := nip.UnmarshalText([]byte(ipc.IP))
+	if err == nil {
+		d := net.Dialer{Timeout: 1 * time.Second}
+		tcpaddr := &net.TCPAddr{IP: nip, Port: ipc.Port}
+		conn, err := d.Dial("tcp", tcpaddr.String())
+		if err == nil {
+			defer conn.Close()
+			px := &models.Proxy{Host: ipc.IP, Port: fmt.Sprintf("%d", ipc.Port), Category: "http"}
 			if models.CheckProxy(px) {
-				fmt.Printf("%s:%d open ,and is a http proxy \n", ipc.IP, port)
+				fmt.Printf("%s:%d open ,and is a http proxy \n", ipc.IP, ipc.Port)
 				dataChan <- px
-				continue
+				return
 			}
-			if models.CheckProxy(&models.Proxy{Host: ipc.IP, Port: fmt.Sprintf("%d", port), Category: "socks5"}) {
-				fmt.Printf("%s:%d open ,and is a socks5 proxy \n", ipc.IP, port)
+			if models.CheckProxy(&models.Proxy{Host: ipc.IP, Port: fmt.Sprintf("%d", ipc.Port), Category: "socks5"}) {
+				fmt.Printf("%s:%d open ,and is a socks5 proxy \n", ipc.IP, ipc.Port)
 				dataChan <- px
-				continue
+				return
 			}
-			fmt.Printf("%s:%d open ,and is not  proxy \n", ipc.IP, port)
+			fmt.Printf("%s:%d open ,and is not  proxy \n", ipc.IP, ipc.Port)
 		}
+
 	}
 	scanner.ScanCount++
+	<-scanner.DoChan
+	scanner.Doing--
 }
 
 // ScanCidr 扫描ip段
@@ -82,19 +87,13 @@ func (scanner *Scanner) ScanFile(f string, dataChan chan *models.Proxy) error {
 		if err != nil {
 			return err
 		}
-		i := 1
 		for IP := ip.Mask(ipnet.Mask); IP.String() != ip.String() && ipnet.Contains(IP) && IP.String() != ipnet.Mask.String(); inc(IP) {
-			addr := Address{IP: IP.String(), Ports: PORTS}
-			scanner.Chan <- addr
-			scanner.IPcount++
-			func() {
-				address := <-scanner.Chan
-				(*scanner).ScanIP(address, dataChan)
-			}()
-			i++
-			if i > 100 {
-				break
+			for port := range PORTS {
+				addr := Address{IP: IP.String(), Port: port}
+				scanner.Chan <- addr
+				scanner.IPcount++
 			}
+
 		}
 		return nil
 
@@ -116,5 +115,31 @@ func (scanner *Scanner) Scan(ctx context.Context, config *models.Config, dataCha
 	} else {
 		return errors.New("未给扫描目标")
 	}
-	return nil
+	for {
+		for scanner.Doing < config.Scanner.MaxConcurrency {
+			select {
+			// case <-scanner.DoChan:
+			// 	address := <-scanner.Chan
+			// 	scanner.WaitGroup.Add(1)
+			// 	go scanner.ScanIP(address, dataChan)
+			// 	scanner.Doing++
+			// 	fmt.Printf("总IP: %d,已完成: %d\n", scanner.IPcount, scanner.ScanCount)
+			// 	break
+			case address := <-scanner.Chan:
+				go scanner.ScanIP(address, dataChan)
+				scanner.Doing++
+				scanner.DoChan <- true
+				fmt.Println("\033[H\033[2J")
+				fmt.Printf("发现IP: %d,已完成: %d\n", scanner.IPcount, scanner.ScanCount)
+				break
+			case <-ctx.Done():
+				close(dataChan)
+				break
+			}
+		}
+		//time.Sleep(10 * time.Millisecond)
+		//fmt.Println(scanner.Doing, scanner.IPcount, scanner.ScanCount)
+		//scanner.WaitGroup.Wait()
+
+	}
 }

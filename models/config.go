@@ -12,8 +12,9 @@ type web struct {
 	Port int
 }
 type scanner struct {
-	File string
-	Cidr string
+	File           string
+	Cidr           string
+	MaxConcurrency int
 }
 
 // Config 配置
@@ -50,5 +51,6 @@ func ConfigFromCtx(ctx *cli.Context) *Config {
 func (c *Config) UnmarshalCtx(ctx *cli.Context) error {
 	c.Scanner.Cidr = ctx.String("cidr")
 	c.Scanner.File = ctx.String("scanfile")
+	c.Scanner.MaxConcurrency = ctx.Int("concurrency")
 	return nil
 }
