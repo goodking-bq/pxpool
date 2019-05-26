@@ -1,0 +1,8 @@
+storagetype: bolt
+bolt:
+  datapath: "C:\\Users\\goodk\\Documents\\go-work\\src\\pxpool"
+scanner:
+  file: "C:\\Users\\goodk\\Documents\\go-work\\src\\pxpool\\ips.txt"
+  maxconcurrency: 10
+web:
+  port: 3000

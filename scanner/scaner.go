@@ -23,21 +23,26 @@ type Scanner struct {
 
 func NewScanner(config *models.Config) *Scanner {
 	return &Scanner{
-		Chan:   make(chan Address),
+		Chan:   make(chan Address, config.Scanner.MaxConcurrency),
 		DoChan: make(chan bool, config.Scanner.MaxConcurrency),
 	}
 }
 
 // ScanIP 扫描 ip端口
 func (scanner *Scanner) ScanIP(ipc Address, dataChan chan *models.Proxy) {
+	log.Printf("scan %s:%d", ipc.IP, ipc.Port)
 	var nip net.IP
 	err := nip.UnmarshalText([]byte(ipc.IP))
 	if err == nil {
-		d := net.Dialer{Timeout: 1 * time.Second}
-		tcpaddr := &net.TCPAddr{IP: nip, Port: ipc.Port}
-		conn, err := d.Dial("tcp", tcpaddr.String())
+		now := time.Now()
+		after := now.Add(time.Duration(1) * time.Second)
+		target := fmt.Sprintf("%s:%d", ipc.IP, ipc.Port)
+		d := &net.Dialer{Timeout: 500 * time.Millisecond, Deadline: after}
+		log.Printf("scan %s:%d 11111", ipc.IP, ipc.Port)
+		conn, err := d.Dial("tcp", target)
+		log.Printf("scan %s:%d 22222", ipc.IP, ipc.Port)
 		if err == nil {
-			defer conn.Close()
+			conn.Close()
 			px := &models.Proxy{Host: ipc.IP, Port: fmt.Sprintf("%d", ipc.Port), Category: "http"}
 			if models.CheckProxy(px) {
 				fmt.Printf("%s:%d open ,and is a http proxy \n", ipc.IP, ipc.Port)
@@ -51,8 +56,8 @@ func (scanner *Scanner) ScanIP(ipc Address, dataChan chan *models.Proxy) {
 			}
 			fmt.Printf("%s:%d open ,and is not  proxy \n", ipc.IP, ipc.Port)
 		}
-
 	}
+	time.Sleep(500 * time.Millisecond)
 	scanner.ScanCount++
 	<-scanner.DoChan
 	scanner.Doing--
@@ -88,7 +93,7 @@ func (scanner *Scanner) ScanFile(f string, dataChan chan *models.Proxy) error {
 			return err
 		}
 		for IP := ip.Mask(ipnet.Mask); IP.String() != ip.String() && ipnet.Contains(IP) && IP.String() != ipnet.Mask.String(); inc(IP) {
-			for port := range PORTS {
+			for _, port := range PORTS {
 				addr := Address{IP: IP.String(), Port: port}
 				scanner.Chan <- addr
 				scanner.IPcount++
@@ -129,7 +134,7 @@ func (scanner *Scanner) Scan(ctx context.Context, config *models.Config, dataCha
 				go scanner.ScanIP(address, dataChan)
 				scanner.Doing++
 				scanner.DoChan <- true
-				fmt.Println("\033[H\033[2J")
+				//fmt.Println("\033[H\033[2J")
 				fmt.Printf("发现IP: %d,已完成: %d\n", scanner.IPcount, scanner.ScanCount)
 				break
 			case <-ctx.Done():

@@ -11,6 +11,9 @@ type Storager interface {
 	//Get() *interface{}
 	AddOrUpdateProxy(p *models.Proxy) error
 	GetProxyByHost(host string) *models.Proxy
+	GetProxyCounter() int64
+	SetProxyCounter(n int64) error
+	IncProxyCounter() error //+1
 	RandomProxy() *models.Proxy
 	//Write(p *model.Proxy) error
 	//Read(p interface{}) *model.Proxy
@@ -35,7 +38,7 @@ func StartStorage(ctx context.Context, storage *Storager, dataChan chan *models.
 	for {
 		select {
 		case proxy := <-dataChan:
-			(*storage).AddOrUpdateProxy(proxy)
+			go (*storage).AddOrUpdateProxy(proxy)
 		case <-ctx.Done():
 			close(dataChan)
 		}

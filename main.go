@@ -19,8 +19,12 @@ func WebAction(c *cli.Context) error {
 	config.UnmarshalCtx(c)
 	ctx, cancal := context.WithCancel(context.Background())
 	defer cancal()
-	storage := storage.GetStorage(config)
-	api := web.DefaultAPI(*storage)
+	dataChan := make(chan *models.Proxy)
+	scanner := scanner.NewScanner(config)
+	go scanner.Scan(ctx, config, dataChan)
+	storager := storage.GetStorage(config)
+	go storage.StartStorage(ctx, storager, dataChan)
+	api := web.DefaultAPI(*storager)
 	api.Run(ctx, config)
 	return nil
 }
@@ -71,11 +75,16 @@ func main() {
 			Usage: "启动爬虫进程",
 			Flags: []cli.Flag{},
 			Action: func(c *cli.Context) {
-				config := models.DefaultConfig()
-				storage := storage.GetStorage(config)
+				config := models.ConfigFromCtx(c)
+				ctx, cancal := context.WithCancel(context.Background())
+				defer cancal()
+				storager := storage.GetStorage(config)
 				DataChan := make(chan *models.Proxy)
-				cManager := crawler.NewDefaultCrawl(storage, DataChan)
+				cManager := crawler.NewDefaultCrawl(storager, DataChan)
 				cManager.Start()
+				go storage.StartStorage(ctx, storager, DataChan)
+				api := web.DefaultAPI(*storager)
+				api.Run(ctx, config)
 				cManager.ExitSignal <- true
 			},
 		},

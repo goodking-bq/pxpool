@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -31,6 +32,7 @@ func GetBoltStorage(path string) *Bolt {
 
 // AddOrUpdateProxy 添加或更新
 func (b *Bolt) AddOrUpdateProxy(p *models.Proxy) error {
+	var isNew bool
 	err := b.db.Update(func(tx *bolt.Tx) error {
 		proxy := b.GetProxyByHost(p.Host)
 		if proxy == nil { //没有新建
@@ -46,12 +48,16 @@ func (b *Bolt) AddOrUpdateProxy(p *models.Proxy) error {
 			proxyKey := proxyID + "|" + p.Host + ":" + p.Port
 			bProxy, err := bProxys.CreateBucketIfNotExists([]byte(proxyKey))
 			p.ID = proxyID
+			isNew = true
 			return b.ProxyToBucket(p, bProxy)
 		}
 		return nil
 	})
 	if err != nil {
 		return err
+	}
+	if isNew == true {
+		b.IncProxyCounter()
 	}
 	return nil
 }
@@ -61,13 +67,14 @@ func (b *Bolt) GetProxyByHost(host string) *models.Proxy {
 	proxy := &models.Proxy{}
 	var has bool
 	if err := b.db.View(func(tx *bolt.Tx) error {
-		bProxys, err := tx.CreateBucketIfNotExists([]byte("proxys"))
-		if err != nil {
-			return err
+		bProxys := tx.Bucket([]byte("proxys"))
+		if bProxys == nil {
+			return errors.New("no proxys bucket")
 		}
 		c := bProxys.Cursor()
 		search := []byte("|" + host + ":")
-		for k, v := c.Seek(search); k != nil && bytes.Contains(k, search); k, v = c.Next() {
+		print(search)
+		for k, v := c.Seek([]byte("190.104.63.220")); k != nil; k, v = c.Next() {
 			fmt.Printf("key=%s, value=%s\n", k, v)
 			bProxy := bProxys.Bucket([]byte(k))
 			b.BucketToProxy(bProxy, proxy)
@@ -112,15 +119,18 @@ func (b *Bolt) ProxyToBucket(p *models.Proxy, bp *bolt.Bucket) error {
 func (b *Bolt) RandomProxy() *models.Proxy {
 	var l int64
 	var proxy = new(models.Proxy)
-	if err := b.db.Update(func(tx *bolt.Tx) error {
-		bProxys, err := tx.CreateBucketIfNotExists([]byte("proxys"))
-		if err != nil {
-			return err
+	if err := b.db.View(func(tx *bolt.Tx) error {
+		bProxys := tx.Bucket([]byte("proxys"))
+		if bProxys == nil {
+			return errors.New("no proxys bucket")
 		}
 		bProxys.ForEach(func(k, v []byte) error {
 			l++
 			return nil
 		})
+		if l == 0 {
+			return nil
+		}
 		n := rand.Int63n(l)
 		nString := strconv.FormatInt(n, 10) + "|"
 		search := []byte(nString)
@@ -140,4 +150,61 @@ func (b *Bolt) RandomProxy() *models.Proxy {
 		return proxy
 	}
 	return nil
+}
+
+// SetProxyCounter proxy 计数器设置
+func (b *Bolt) SetProxyCounter(n int64) error {
+	err := b.db.Update(func(tx *bolt.Tx) error {
+		counter, err := tx.CreateBucketIfNotExists([]byte("proxycounter"))
+		if err != nil {
+			return err
+		}
+		counter.Put([]byte("count"), []byte(strconv.FormatInt(n, 10)))
+		counter.Put([]byte("update"), []byte(time.Now().String()))
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetProxyCounter 获取proxy个数
+func (b *Bolt) GetProxyCounter() int64 {
+	var count int64
+	b.db.View(func(tx *bolt.Tx) error {
+		counter := tx.Bucket([]byte("proxycounter"))
+		if counter != nil {
+			buf := counter.Get([]byte("count"))
+			count1, err := strconv.ParseInt(string(buf), 10, 64)
+			if err != nil {
+				return err
+			}
+			count = count1
+		}
+
+		return nil
+	})
+	return count
+}
+
+// IncProxyCounter counter +1
+func (b *Bolt) IncProxyCounter() error {
+	err := b.db.Batch(func(tx *bolt.Tx) error {
+		counter, err := tx.CreateBucketIfNotExists([]byte("proxycounter"))
+		if err != nil {
+			return err
+		}
+		buf := counter.Get([]byte("count"))
+		count, err := strconv.ParseInt(string(buf), 10, 64)
+		if err != nil {
+			count = 0
+		}
+		count++
+		log.Println(count)
+		counter.Put([]byte("count"), []byte(strconv.FormatInt(count, 10)))
+		counter.Put([]byte("update"), []byte(time.Now().String()))
+		return nil
+	})
+	return err
 }

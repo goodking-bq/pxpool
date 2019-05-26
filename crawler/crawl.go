@@ -54,22 +54,6 @@ func (cm *Crawl) Add(c *Spider) error {
 	return nil
 }
 
-// Save 保存
-func (cm *Crawl) Save() { // 开始接受
-	for {
-		select {
-		case proxy := <-cm.DataChan:
-			go (*cm.storage).AddOrUpdateProxy(proxy)
-		case stop := <-cm.ExitSignal:
-			if stop {
-				close(cm.DataChan)
-				return
-			}
-		}
-	}
-
-}
-
 // Crawl 开始所有爬虫
 func (cm *Crawl) Crawl() {
 	for _, spider := range cm.Spiders {
@@ -79,7 +63,6 @@ func (cm *Crawl) Crawl() {
 
 func (cm *Crawl) Start() {
 	cm.Crawl()
-	cm.Save()
 }
 
 // StartTicker 开始爬虫循环跑
@@ -106,5 +89,4 @@ func (cm *Crawl) StartTicker() {
 func (cm *Crawl) StartAndTicker() {
 	cm.Crawl()
 	cm.StartTicker()
-	cm.Save()
 }
