@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"strconv"
+	"sync"
 	"time"
 
 	"pxpool/models"
@@ -20,14 +21,20 @@ type Bolt struct {
 	path string
 }
 
-// GetBoltStorage 返回storage
-func GetBoltStorage(path string) *Bolt {
-	db, err := bolt.Open(path+"/pxpool.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
-	if err != nil {
-		log.Fatal(err)
-	}
+var db *Bolt
+var once sync.Once
 
-	return &Bolt{db: db, path: path}
+// GetBoltStorage 返回storage 单例模式
+func GetBoltStorage(path string) *Bolt {
+	once.Do(func() {
+		thisdb, err := bolt.Open(path+"/pxpool.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+		if err != nil {
+			log.Fatal(err)
+		}
+		db = &Bolt{db: thisdb, path: path}
+	})
+
+	return db
 }
 
 // AddOrUpdateProxy 添加或更新
@@ -72,14 +79,19 @@ func (b *Bolt) GetProxyByHost(host string) *models.Proxy {
 			return errors.New("no proxys bucket")
 		}
 		c := bProxys.Cursor()
-		search := []byte("|" + host + ":")
-		print(search)
-		for k, v := c.Seek([]byte("190.104.63.220")); k != nil; k, v = c.Next() {
-			fmt.Printf("key=%s, value=%s\n", k, v)
-			bProxy := bProxys.Bucket([]byte(k))
-			b.BucketToProxy(bProxy, proxy)
-			has = true
-			break
+		searchstr := "|" + host + ":"
+		print(searchstr)
+		search := []byte(searchstr)
+
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			if bytes.Contains(k, search) {
+				fmt.Printf("key=%s\n", k)
+				bProxy := bProxys.Bucket([]byte(k))
+				b.BucketToProxy(bProxy, proxy)
+				has = true
+				break
+			}
+
 		}
 		return nil
 	}); err != nil {
@@ -135,7 +147,7 @@ func (b *Bolt) RandomProxy() *models.Proxy {
 		nString := strconv.FormatInt(n, 10) + "|"
 		search := []byte(nString)
 		c := bProxys.Cursor()
-		for k, v := c.Seek(search); k != nil && bytes.Contains(k, search); k, v = c.Next() {
+		for k, v := c.Seek(search); k != nil && bytes.HasPrefix(k, search); k, v = c.Next() {
 			fmt.Printf("key=%s, value=%s\n", k, v)
 			bProxy := bProxys.Bucket([]byte(k))
 			b.BucketToProxy(bProxy, proxy)

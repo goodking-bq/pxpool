@@ -18,6 +18,7 @@ type scanner struct {
 	File           string
 	Cidr           string
 	MaxConcurrency int
+	Ports          []int
 }
 
 // Config 配置

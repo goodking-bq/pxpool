@@ -1,8 +1,17 @@
 storagetype: bolt
 bolt:
-  datapath: "C:\\Users\\goodk\\Documents\\go-work\\src\\pxpool"
+  datapath: "D:\\go-program\\src\\pxpool"
 scanner:
-  file: "C:\\Users\\goodk\\Documents\\go-work\\src\\pxpool\\ips.txt"
-  maxconcurrency: 10
+  file: "D:\\go-program\\src\\pxpool\\ips.txt"
+  maxconcurrency: 100
+  ports:
+    - 80
+    - 8080
+    - 3128
+    - 8081
+    - 9080
+    - 10808
 web:
   port: 3000
+log: "D:\\go-program\\src\\pxpool\\pxpool.log"
+loglevel: "info"

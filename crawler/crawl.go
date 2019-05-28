@@ -3,8 +3,9 @@ package crawler
 import (
 	"log"
 	"pxpool/models"
-	"pxpool/storage"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 // Spider 爬虫接口
@@ -22,27 +23,24 @@ type Crawl struct {
 	DataChan   chan *models.Proxy // 数据交换用
 	ExitSignal chan bool          // 退出信号
 	Spiders    map[string]*Spider
-	storage    *storage.Storager
 }
 
 // NewCrawl 创建Crawl
-func NewCrawl(storage *storage.Storager) *Crawl {
+func NewCrawl() *Crawl {
 	return &Crawl{
 		Spiders:    make(map[string]*Spider),
-		storage:    storage,
 		DataChan:   make(chan *models.Proxy),
 		ExitSignal: make(chan bool),
 	}
 }
 
 // NewDefaultCrawl 创建Crawl
-func NewDefaultCrawl(storage *storage.Storager, DataChan chan *models.Proxy) *Crawl {
+func NewDefaultCrawl(DataChan chan *models.Proxy) *Crawl {
 	spiders := make(map[string]*Spider)
 	kdl := NewKdlSpider(DataChan).ToSpider()
 	spiders[(*kdl).GetName()] = kdl
 	return &Crawl{
 		Spiders:    spiders,
-		storage:    storage,
 		DataChan:   DataChan,
 		ExitSignal: make(chan bool),
 	}
@@ -90,3 +88,6 @@ func (cm *Crawl) StartAndTicker() {
 	cm.Crawl()
 	cm.StartTicker()
 }
+
+// Command 爬虫命令
+func Command(cmd *cobra.Command) {}

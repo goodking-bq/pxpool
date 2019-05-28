@@ -3,105 +3,113 @@ package scanner
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
-	"os"
 	"pxpool/models"
+	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Scanner 扫描器
 type Scanner struct {
-	IPcount   int
-	ScanCount int
-	Doing     int
+	IPcount   models.Int64Counter
+	ScanCount models.Int64Counter
+	Doing     models.Int64Counter
 	DoChan    chan bool
 	Chan      chan Address
+	Wg        sync.WaitGroup
+	logger    *logrus.Logger
 }
 
-func NewScanner(config *models.Config) *Scanner {
+// NewScanner xxxx
+func NewScanner(mc int64, logger *logrus.Logger) *Scanner {
 	return &Scanner{
-		Chan:   make(chan Address, config.Scanner.MaxConcurrency),
-		DoChan: make(chan bool, config.Scanner.MaxConcurrency),
+		Chan:   make(chan Address, mc),
+		Wg:     sync.WaitGroup{},
+		logger: logger,
+		DoChan: make(chan bool, mc),
 	}
 }
 
 // ScanIP 扫描 ip端口
 func (scanner *Scanner) ScanIP(ipc Address, dataChan chan *models.Proxy) {
-	log.Printf("scan %s:%d", ipc.IP, ipc.Port)
+	defer scanner.Done(ipc)
+	// time.AfterFunc(2*time.Second, func() {
+	// 	scanner.Done()
+	// 	fmt.Printf("scan %s:%d canceled", ipc.IP, ipc.Port)
+	// 	return
+	// })
 	var nip net.IP
 	err := nip.UnmarshalText([]byte(ipc.IP))
-	if err == nil {
-		now := time.Now()
-		after := now.Add(time.Duration(1) * time.Second)
-		target := fmt.Sprintf("%s:%d", ipc.IP, ipc.Port)
-		d := &net.Dialer{Timeout: 500 * time.Millisecond, Deadline: after}
-		log.Printf("scan %s:%d 11111", ipc.IP, ipc.Port)
-		conn, err := d.Dial("tcp", target)
-		log.Printf("scan %s:%d 22222", ipc.IP, ipc.Port)
-		if err == nil {
-			conn.Close()
-			px := &models.Proxy{Host: ipc.IP, Port: fmt.Sprintf("%d", ipc.Port), Category: "http"}
-			if models.CheckProxy(px) {
-				fmt.Printf("%s:%d open ,and is a http proxy \n", ipc.IP, ipc.Port)
-				dataChan <- px
-				return
-			}
-			if models.CheckProxy(&models.Proxy{Host: ipc.IP, Port: fmt.Sprintf("%d", ipc.Port), Category: "socks5"}) {
-				fmt.Printf("%s:%d open ,and is a socks5 proxy \n", ipc.IP, ipc.Port)
-				dataChan <- px
-				return
-			}
-			fmt.Printf("%s:%d open ,and is not  proxy \n", ipc.IP, ipc.Port)
-		}
+	if err != nil {
+		log.Println(err)
+		return
 	}
-	time.Sleep(500 * time.Millisecond)
-	scanner.ScanCount++
-	<-scanner.DoChan
-	scanner.Doing--
+	d := &net.Dialer{Timeout: 500 * time.Millisecond}
+	target := fmt.Sprintf("%s:%d", ipc.IP, ipc.Port)
+	scanner.logger.Debugf("开始连接：%s:%d", ipc.IP, ipc.Port)
+	conn, err := d.Dial("tcp", target)
+	if err != nil {
+		return
+	}
+	conn.Close()
+	scanner.logger.Debugf("连接成功：%s:%d， 正在检查 ..", ipc.IP, ipc.Port)
+	px := &models.Proxy{Host: ipc.IP, Port: fmt.Sprintf("%d", ipc.Port), Category: "http"}
+	if models.CheckProxy(px) {
+		scanner.logger.Infof("发现新的代理：%s", px.URL())
+		dataChan <- px
+		return
+	}
+	if models.CheckProxy(&models.Proxy{Host: ipc.IP, Port: fmt.Sprintf("%d", ipc.Port), Category: "socks5"}) {
+		scanner.logger.Infof("发现新的代理：%s", px.URL())
+		dataChan <- px
+		return
+	}
+	scanner.logger.Debugf("%s:%d open ,and is not  proxy \n", ipc.IP, ipc.Port)
 }
 
 // ScanCidr 扫描ip段
-func (scanner *Scanner) ScanCidr(cidr []byte, dataChan chan *models.Proxy) {
+func (scanner *Scanner) FromCidr(cidr []byte, dataChan chan *models.Proxy) {
 	ads := NewAddresses()
 	err := ads.UnmarshalCidrText(cidr)
 	if err != nil {
 		fmt.Println(err)
 	}
-	scanner.IPcount += len(*ads)
+	scanner.IPcount.Inc(int64(len(*ads)))
 	for _, address := range *ads {
 		// ScanChan <- address
 		go scanner.ScanIP(address, dataChan)
 	}
 }
 
-// ScanFile 扫描ip文件
-func (scanner *Scanner) ScanFile(f string, dataChan chan *models.Proxy) error {
-	file, err := os.Open(f)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	defer file.Close()
-
+// FromFile 扫描ip文件
+func (scanner *Scanner) FromFile(file io.Reader, dataChan chan *models.Proxy) error {
 	fscanner := bufio.NewScanner(file)
 	for fscanner.Scan() {
-		ip, ipnet, err := net.ParseCIDR(fscanner.Text())
+		cidr := fscanner.Text()
+		log.Printf("扫描段 ： %s", cidr)
+		ip, ipnet, err := net.ParseCIDR(cidr)
 		if err != nil {
-			return err
+			scanner.logger.Errorf("文件行错误: %s", cidr)
 		}
-		for IP := ip.Mask(ipnet.Mask); IP.String() != ip.String() && ipnet.Contains(IP) && IP.String() != ipnet.Mask.String(); inc(IP) {
-			for _, port := range PORTS {
-				addr := Address{IP: IP.String(), Port: port}
-				scanner.Chan <- addr
-				scanner.IPcount++
+		for IP := ip.Mask(ipnet.Mask); ipnet.Contains(IP); inc(IP) {
+			if IP.String() == "172.0.0.254" {
+				log.Println(IP)
+			}
+
+			if IP.String() != ipnet.IP.String() && IP.String() != ipnet.Mask.String() {
+				for _, port := range PORTS {
+					addr := Address{IP: IP.String(), Port: port}
+					scanner.Chan <- addr
+					scanner.IPcount.Inc(1)
+				}
 			}
 
 		}
-		return nil
-
 	}
 
 	if err := fscanner.Err(); err != nil {
@@ -112,39 +120,40 @@ func (scanner *Scanner) ScanFile(f string, dataChan chan *models.Proxy) error {
 }
 
 // Scan 开始扫描
-func (scanner *Scanner) Scan(ctx context.Context, config *models.Config, dataChan chan *models.Proxy) error {
-	if config.Scanner.File != "" {
-		go scanner.ScanFile(config.Scanner.File, dataChan)
-	} else if config.Scanner.Cidr != "" {
-		scanner.ScanCidr([]byte(config.Scanner.Cidr), dataChan)
-	} else {
-		return errors.New("未给扫描目标")
-	}
+func (scanner *Scanner) Scan(ctx context.Context, maxc int64, dataChan chan *models.Proxy) error {
+	ticker := time.NewTicker(time.Second * 10)
+	var lastTick int64
+
 	for {
-		for scanner.Doing < config.Scanner.MaxConcurrency {
+		for scanner.Doing.Get() < maxc {
 			select {
-			// case <-scanner.DoChan:
-			// 	address := <-scanner.Chan
-			// 	scanner.WaitGroup.Add(1)
-			// 	go scanner.ScanIP(address, dataChan)
-			// 	scanner.Doing++
-			// 	fmt.Printf("总IP: %d,已完成: %d\n", scanner.IPcount, scanner.ScanCount)
-			// 	break
+			case <-ticker.C:
+				scanner.logger.Infof("ip数：%d,正在执行: %d,已完成: %d\n", scanner.IPcount.Get(), scanner.Doing.Get(), scanner.ScanCount.Get())
+				if scanner.ScanCount.Get() != lastTick {
+					lastTick = scanner.ScanCount.Get()
+				} else {
+					scanner.logger.Fatalln("扫描意外停止停止。")
+				}
 			case address := <-scanner.Chan:
-				go scanner.ScanIP(address, dataChan)
-				scanner.Doing++
-				scanner.DoChan <- true
-				//fmt.Println("\033[H\033[2J")
-				fmt.Printf("发现IP: %d,已完成: %d\n", scanner.IPcount, scanner.ScanCount)
-				break
+				scanner.Wg.Add(1)
+				go scanner.ScanIP(address, models.ProxyChan)
+				scanner.Doing.Inc(1)
 			case <-ctx.Done():
-				close(dataChan)
+				close(models.ProxyChan)
 				break
 			}
 		}
-		//time.Sleep(10 * time.Millisecond)
-		//fmt.Println(scanner.Doing, scanner.IPcount, scanner.ScanCount)
-		//scanner.WaitGroup.Wait()
-
+		scanner.Wg.Wait()
 	}
+}
+
+func (scanner *Scanner) Done(addr Address) {
+	scanner.ScanCount.Inc(1)
+	scanner.DoChan <- true
+	scanner.Doing.Dec(1)
+	scanner.Wg.Done()
+	scanner.logger.WithFields(logrus.Fields{
+		"ip":   addr.IP,
+		"port": addr.Port,
+	}).Debugln("扫描完成")
 }

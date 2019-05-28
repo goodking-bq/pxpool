@@ -39,8 +39,18 @@ func (api *API) Run(ctx context.Context, config *models.Config) {
 		w.Write([]byte(strconv.FormatInt(p, 10)))
 	})
 	http.HandleFunc("/search/", func(w http.ResponseWriter, r *http.Request) {
-		p := api.storage.GetProxyByHost("27.203.247.35")
-		w.Write([]byte(p.ID))
+		r.ParseForm()
+		if len(r.Form["ip"]) > 0 {
+			ip := r.Form.Get("ip")
+			p := api.storage.GetProxyByHost(ip)
+			if p != nil {
+				w.Write([]byte(p.URL()))
+			} else {
+				w.Write([]byte("proxy not exist"))
+			}
+		} else {
+			w.Write([]byte("you need give me a ip"))
+		}
 	})
 	//监听3000端口
 	http.ListenAndServe(fmt.Sprintf("%s:%d", config.Web.Bind, config.Web.Port), nil)

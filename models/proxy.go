@@ -23,6 +23,9 @@ type Proxy struct {
 	VerifyTime string
 }
 
+// ProxyChan Proxy channel
+var ProxyChan = make(chan *Proxy)
+
 // CheckProxy 检查代理是否可用
 func CheckProxy(p *Proxy) bool {
 	return p.check()
@@ -49,43 +52,46 @@ func (p *Proxy) Key() string {
 }
 
 func (p *Proxy) check() bool {
-	netTransport := &http.Transport{}
+	log.Printf("开始检查 ..,%s", p.URL())
+	netTransport := &http.Transport{
+		TLSHandshakeTimeout:   1 * time.Second,
+		ResponseHeaderTimeout: 2 * time.Second,
+		MaxIdleConnsPerHost:   1,
+	}
 	if strings.ToLower(p.Category) == "http" || strings.ToLower(p.Category) == "https" {
 		proxy, _ := url.Parse(p.URL())
 		netTransport.Proxy = http.ProxyURL(proxy)
 		netTransport.Dial = func(netw, addr string) (net.Conn, error) {
-			c, err := net.DialTimeout(netw, addr, time.Second*time.Duration(10))
+			c, err := net.DialTimeout(netw, addr, time.Second*time.Duration(2))
 			if err != nil {
 				return nil, err
 			}
 			return c, nil
 		}
-		//Proxy: http.ProxyFromEnvironment,
-
-		netTransport.MaxIdleConnsPerHost = 10                               //每个host最大空闲连接
-		netTransport.ResponseHeaderTimeout = time.Second * time.Duration(5) //数据收发5秒超时
-
 	} else {
-		dialer, err := nproxy.SOCKS5("tcp", p.Host+":"+p.Port, nil, nproxy.Direct)
+		dialer, err := nproxy.SOCKS5("tcp", p.Host+":"+p.Port, nil, &net.Dialer{Timeout: 2 * time.Second})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "can't connect to the proxy:", err)
-			os.Exit(1)
+			return false
 		}
 		// setup a http client
 		netTransport.Dial = dialer.Dial
 	}
 
 	client := &http.Client{
-		Timeout:   time.Second * 10,
+		Timeout:   time.Second * 2,
 		Transport: netTransport}
 	req, err := http.NewRequest("GET", "http://www.ip138.com/", nil)
+	defer client.CloseIdleConnections()
 	if err != nil {
 		return true
 	}
 	req.Close = true
 	req.Header.Add("Accept-Encoding", "identity")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/532.5 (KHTML, like Gecko) Chrome/4.0.249.0 Safari/532.5")
+	log.Printf("使用代理链接中 ..,%s", p.URL())
 	resp, err := client.Do(req)
+	log.Printf("使用代理链接中 ..,%s -- 完成", p.URL())
 	if err != nil {
 		log.Println(err)
 		return false
@@ -105,17 +111,3 @@ type ProxyStory struct {
 func GetProxyStory() *ProxyStory {
 	return &ProxyStory{}
 }
-
-// ContextString contextvalue 专用
-type ContextString string
-
-func (c ContextString) String() string {
-	return "pxpoll key " + string(c)
-}
-
-var (
-	// ProxyCounter Proxy 计数器
-	ProxyCounter = ContextString("ProxyCount")
-	WebBind      = ContextString("WebBind")
-	WebPort      = ContextString("WebPort")
-)
