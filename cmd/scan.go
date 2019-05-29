@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"pxpool/models"
 	"pxpool/scanner"
@@ -9,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -18,7 +22,29 @@ var (
 	cidrFile       string
 	cidrOne        string
 	ports          string
+	postURL        string
 )
+
+func PostProxy(proxy *models.Proxy, urlStr string) {
+	resp, err := http.PostForm(urlStr,
+		url.Values{"host": {proxy.Host}, "port": {proxy.Host}, "category": {proxy.Category}})
+
+	if err != nil {
+		// handle error
+		logger.WithFields(logrus.Fields{"proxy": proxy.URL()}).Errorf("代理提交失败: %s", err)
+		return
+	}
+
+	defer resp.Body.Close()
+	_, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		// handle error
+		logger.WithFields(logrus.Fields{"proxy": proxy.URL()}).Errorf("代理提交返回失败: %s", err)
+		return
+	}
+
+	logger.WithFields(logrus.Fields{"proxy": proxy.URL()}).Errorln("代理提交成功！")
+}
 
 func ExecuteScan(cmd *cobra.Command, args []string) {
 
@@ -66,7 +92,19 @@ func ExecuteScan(cmd *cobra.Command, args []string) {
 			//}
 		}
 	}()
-	storage.StartStorage(gCtx, &storager, models.ProxyChan)
+	if postURL == "" {
+		storage.StartStorage(gCtx, &storager, models.ProxyChan)
+	} else {
+		for {
+			select {
+			case proxy := <-models.ProxyChan:
+				go PostProxy(proxy, postURL)
+			case <-gCtx.Done():
+				close(models.ProxyChan)
+			}
+		}
+	}
+
 	// exit := make(chan os.Signal)
 	// signal.Notify(exit, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGKILL)
 	// signal := <-exit
@@ -85,10 +123,13 @@ var scanCmd = &cobra.Command{
 func init() {
 	scanCmd.PreRunE = preRunE
 	rootCmd.AddCommand(scanCmd)
+
 	scanCmd.Flags().StringVarP(&cidrFile, "file", "f", "", "从文件加载目标，一行一个。")
 	scanCmd.Flags().StringVar(&ports, "ports", "80", "需要扫描的端口")
 	scanCmd.Flags().StringVar(&cidrOne, "cidr", "", "给定cidr作为扫描目标")
 	scanCmd.Flags().Int64VarP(&maxConcurrency, "maxconcurrency", "C", 0, "扫描并发数量")
+	scanCmd.Flags().StringVarP(&postURL, "post", "p", "", "扫描并发数量")
+	initStorager()
 }
 
 func preRunE(cmd *cobra.Command, args []string) error {
@@ -101,6 +142,10 @@ func preRunE(cmd *cobra.Command, args []string) error {
 	if ports == "" {
 		ports = viper.GetStringMapString("scanner")["ports"]
 	}
+	if postURL == "" {
+		postURL = viper.GetStringMapString("scanner")["post"]
+	}
+	logger.Errorf("pu: %s", postURL)
 	if maxConcurrency == 0 {
 		u, err := strconv.ParseUint(viper.GetStringMapString("scanner")["maxconcurrency"], 10, 64)
 		if err != nil {

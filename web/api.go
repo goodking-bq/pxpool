@@ -32,7 +32,6 @@ func (api *API) Run(ctx context.Context) {
 		}
 
 	})
-
 	http.HandleFunc("/counter/", func(w http.ResponseWriter, r *http.Request) {
 		p := api.storage.GetProxyCounter()
 		w.Write([]byte(strconv.FormatInt(p, 10)))
@@ -41,10 +40,11 @@ func (api *API) Run(ctx context.Context) {
 		r.ParseForm()
 		if len(r.Form["ip"]) > 0 {
 			ip := r.Form.Get("ip")
-			p := api.storage.GetProxyByHost(ip)
-			if p != nil {
-				w.Write([]byte(p.URL()))
-			} else {
+			p := api.storage.GetProxysByHost(ip)
+			for _, px := range p {
+				w.Write([]byte(px.URL() + "\n"))
+			}
+			if len(p) == 0 {
 				w.Write([]byte("proxy not exist"))
 			}
 		} else {

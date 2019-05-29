@@ -10,7 +10,8 @@ import (
 type Storager interface {
 	//Get() *interface{}
 	AddOrUpdateProxy(p *models.Proxy) error
-	GetProxyByHost(host string) *models.Proxy
+	GetProxysByHost(host string) []*models.Proxy
+	GetProxyByproxy(p *models.Proxy) *models.Proxy
 	GetProxyCounter() int64
 	SetProxyCounter(n int64) error
 	IncProxyCounter() error //+1

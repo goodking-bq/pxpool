@@ -11,6 +11,7 @@ scanner:
     - 8081
     - 9080
     - 10808
+  post: "http://localhost:3000/api/proxy"
 web:
   port: 3000
 log: "D:\\go-program\\src\\pxpool\\pxpool.log"

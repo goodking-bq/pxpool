@@ -65,7 +65,6 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 	cobra.OnInitialize(initLog)
-	cobra.OnInitialize(initStorager)
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
@@ -94,19 +93,22 @@ func initConfig() {
 
 		// Search config in home directory with name ".pp" (without extension).
 		viper.AddConfigPath(home)
-		viper.SetConfigName(".pp")
+		viper.SetConfigName(".pxpool")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		logger.Infoln("Using config file:", viper.ConfigFileUsed())
+		logger.Infoln("使用配置文件:", viper.ConfigFileUsed())
 	}
 	//cidrFile = viper.GetStringMapString("scanner")["file"]
 }
 
 func initStorager() {
+	if postURL != "" {
+		return
+	}
 	if storageType == "" {
 		storageType = viper.GetString("storagetype")
 	}

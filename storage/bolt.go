@@ -39,9 +39,8 @@ func GetBoltStorage(path string) *Bolt {
 
 // AddOrUpdateProxy 添加或更新
 func (b *Bolt) AddOrUpdateProxy(p *models.Proxy) error {
-	var isNew bool
 	err := b.db.Update(func(tx *bolt.Tx) error {
-		proxy := b.GetProxyByHost(p.Host)
+		proxy := b.GetProxyByproxy(p)
 		if proxy == nil { //没有新建
 			bProxys, err := tx.CreateBucketIfNotExists([]byte("proxys"))
 			if err != nil {
@@ -55,7 +54,7 @@ func (b *Bolt) AddOrUpdateProxy(p *models.Proxy) error {
 			proxyKey := proxyID + "|" + p.Host + ":" + p.Port
 			bProxy, err := bProxys.CreateBucketIfNotExists([]byte(proxyKey))
 			p.ID = proxyID
-			isNew = true
+			b.IncProxyCounter()
 			return b.ProxyToBucket(p, bProxy)
 		}
 		return nil
@@ -63,15 +62,12 @@ func (b *Bolt) AddOrUpdateProxy(p *models.Proxy) error {
 	if err != nil {
 		return err
 	}
-	if isNew == true {
-		b.IncProxyCounter()
-	}
 	return nil
 }
 
-// GetProxyByHost 更加host查找proxy
-func (b *Bolt) GetProxyByHost(host string) *models.Proxy {
-	proxy := &models.Proxy{}
+// GetProxysByHost 根据host查找proxy
+func (b *Bolt) GetProxysByHost(host string) []*models.Proxy {
+	var proxys []*models.Proxy
 	var has bool
 	if err := b.db.View(func(tx *bolt.Tx) error {
 		bProxys := tx.Bucket([]byte("proxys"))
@@ -85,11 +81,11 @@ func (b *Bolt) GetProxyByHost(host string) *models.Proxy {
 
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
 			if bytes.Contains(k, search) {
+				proxy := &models.Proxy{}
 				fmt.Printf("key=%s\n", k)
 				bProxy := bProxys.Bucket([]byte(k))
 				b.BucketToProxy(bProxy, proxy)
-				has = true
-				break
+				proxys = append(proxys, proxy)
 			}
 
 		}
@@ -98,7 +94,37 @@ func (b *Bolt) GetProxyByHost(host string) *models.Proxy {
 		return nil
 	}
 	if has == true {
-		return proxy
+		return proxys
+	}
+	return nil
+}
+
+// GetProxyByproxy xxx
+func (b *Bolt) GetProxyByproxy(p *models.Proxy) *models.Proxy {
+	if err := b.db.View(func(tx *bolt.Tx) error {
+		bProxys := tx.Bucket([]byte("proxys"))
+		if bProxys == nil {
+			return errors.New("no proxys bucket")
+		}
+		c := bProxys.Cursor()
+		searchstr := "|" + p.Host + ":" + p.Port
+		print(searchstr)
+		search := []byte(searchstr)
+
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			if bytes.Contains(k, search) {
+				fmt.Printf("key=%s\n", k)
+				bProxy := bProxys.Bucket([]byte(k))
+				b.BucketToProxy(bProxy, p)
+			}
+
+		}
+		return nil
+	}); err != nil {
+		return nil
+	}
+	if p.ID != "" {
+		return p
 	}
 	return nil
 }
