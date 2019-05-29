@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"context"
 	"log"
 	"os"
 	"pxpool/storage"
@@ -28,12 +29,13 @@ import (
 )
 
 var (
-	cfgFile     string
-	logFile     string
-	logLevel    string
-	storageType string
-	storager    storage.Storager
-	logger      = logrus.New()
+	cfgFile       string
+	logFile       string
+	logLevel      string
+	storageType   string
+	storager      storage.Storager
+	logger        = logrus.New()
+	gCtx, gCancal = context.WithCancel(context.Background())
 )
 
 // rootCmd represents the base command when called without any subcommands

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"pxpool/models"
 	"pxpool/storage"
 )
 
@@ -23,7 +22,7 @@ func DefaultAPI(storage storage.Storager) *API {
 }
 
 // Run 启动api
-func (api *API) Run(ctx context.Context, config *models.Config) {
+func (api *API) Run(ctx context.Context) {
 	http.HandleFunc("/random/", func(w http.ResponseWriter, r *http.Request) {
 		p := api.storage.RandomProxy()
 		if p == nil {
@@ -53,5 +52,15 @@ func (api *API) Run(ctx context.Context, config *models.Config) {
 		}
 	})
 	//监听3000端口
-	http.ListenAndServe(fmt.Sprintf("%s:%d", config.Web.Bind, config.Web.Port), nil)
+	http.ListenAndServe(fmt.Sprintf("%s:%d", api.bind, api.port), nil)
+}
+
+// SetBind 启动api
+func (api *API) SetBind(bind string) {
+	api.bind = bind
+}
+
+// SetPort 启动api
+func (api *API) SetPort(port int) {
+	api.port = port
 }

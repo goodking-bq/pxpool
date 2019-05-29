@@ -1,11 +1,10 @@
 package cmd
 
 import (
-	"context"
-	"log"
 	"os"
 	"pxpool/models"
 	"pxpool/scanner"
+	"pxpool/storage"
 	"runtime"
 	"strconv"
 	"time"
@@ -22,8 +21,7 @@ var (
 )
 
 func ExecuteScan(cmd *cobra.Command, args []string) {
-	ctx, cancal := context.WithCancel(context.Background())
-	defer cancal()
+
 	scanner := scanner.NewScanner(maxConcurrency, logger)
 	if cidrFile != "" {
 		file, err := os.Open(cidrFile)
@@ -61,21 +59,14 @@ func ExecuteScan(cmd *cobra.Command, args []string) {
 				go scanner.ScanIP(address, models.ProxyChan)
 				scanner.Doing.Inc(1)
 
-			case <-ctx.Done():
+			case <-gCtx.Done():
 				close(models.ProxyChan)
 				break
 			}
 			//}
 		}
 	}()
-	for {
-		select {
-		case a := <-models.ProxyChan:
-			log.Println(a)
-		}
-	}
-
-	//storage.StartStorage(ctx, &storager, dataChan)
+	storage.StartStorage(gCtx, &storager, models.ProxyChan)
 	// exit := make(chan os.Signal)
 	// signal.Notify(exit, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGKILL)
 	// signal := <-exit
