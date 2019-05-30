@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/spf13/cobra"
 )
 
 // Spider 爬虫接口
@@ -25,27 +23,17 @@ type Crawl struct {
 	ExitSignal chan bool          // 退出信号
 	Spiders    map[string]*Spider
 	logger     *logrus.Logger
+	config     *models.Config
 }
 
 // NewCrawl 创建Crawl
-func NewCrawl(logger *logrus.Logger) *Crawl {
+func NewCrawl(logger *logrus.Logger, config *models.Config, DataChan chan *models.Proxy) *Crawl {
 	return &Crawl{
 		Spiders:    make(map[string]*Spider),
-		DataChan:   make(chan *models.Proxy),
-		ExitSignal: make(chan bool),
-		logger:     logger,
-	}
-}
-
-// NewDefaultCrawl 创建Crawl
-func NewDefaultCrawl(DataChan chan *models.Proxy) *Crawl {
-	spiders := make(map[string]*Spider)
-	kdl := NewKdlSpider(DataChan).ToSpider()
-	spiders[(*kdl).GetName()] = kdl
-	return &Crawl{
-		Spiders:    spiders,
 		DataChan:   DataChan,
 		ExitSignal: make(chan bool),
+		logger:     logger,
+		config:     config,
 	}
 }
 
@@ -64,12 +52,15 @@ func (cm *Crawl) Crawl() {
 
 func (cm *Crawl) Start() {
 	cm.Crawl()
+	if cm.config.Crawl.Ticker > 0 {
+		cm.StartTicker()
+	}
 }
 
 // StartTicker 开始爬虫循环跑
-func (cm *Crawl) StartTicker(t int) {
+func (cm *Crawl) StartTicker() {
 	cm.logger.Debugln("爬虫60秒后再次运行")
-	crawlTicker := time.NewTicker(time.Second * time.Duration(t))
+	crawlTicker := time.NewTicker(time.Second * time.Duration(cm.config.Crawl.Ticker))
 	go func(ticker *time.Ticker) {
 		defer ticker.Stop()
 		for {
@@ -85,12 +76,3 @@ func (cm *Crawl) StartTicker(t int) {
 		}
 	}(crawlTicker)
 }
-
-// StartAndTicker 开始并定时执行
-func (cm *Crawl) StartAndTicker(t int) {
-	cm.Crawl()
-	cm.StartTicker(t)
-}
-
-// Command 爬虫命令
-func Command(cmd *cobra.Command) {}

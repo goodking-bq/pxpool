@@ -18,14 +18,9 @@ import (
 	"pxpool/crawler"
 	"pxpool/models"
 	"pxpool/storage"
-	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-)
-
-var (
-	ticker int
 )
 
 // crawlCmd represents the crawl command
@@ -34,17 +29,15 @@ var crawlCmd = &cobra.Command{
 	Short: "启动网络爬虫",
 	Long:  `运行爬虫程序.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cManager := crawler.NewDefaultCrawl(models.ProxyChan)
-		if ticker > 0 {
-			cManager.StartAndTicker(ticker)
-		}
-		if postURL == "" {
+		cManager := crawler.NewCrawl(logger, config, models.ProxyChan)
+		cManager.Start()
+		if config.Url == "" {
 			storage.StartStorage(gCtx, &storager, models.ProxyChan)
 		} else {
 			for {
 				select {
 				case proxy := <-models.ProxyChan:
-					go PostProxy(proxy, postURL)
+					go PostProxy(proxy, config.Url)
 				case <-gCtx.Done():
 					close(models.ProxyChan)
 				}
@@ -57,24 +50,6 @@ var crawlCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(crawlCmd)
-	crawlCmd.PreRunE = crawlPreRunE
-	scanCmd.Flags().StringVarP(&postURL, "post", "p", "", "结果提交地址")
-	scanCmd.Flags().IntVarP(&ticker, "ticker", "t", 0, "扫描间隔时间")
-	initStorager()
-}
-
-func crawlPreRunE(cmd *cobra.Command, args []string) error {
-	if postURL == "" {
-		postURL = viper.GetStringMapString("crawl")["post"]
-	}
-	if ticker == 0 {
-		ts := viper.GetStringMapString("crawl")["ticker"]
-		_t, err := strconv.ParseInt(ts, 10, 0)
-		if err != nil {
-			ticker = 0
-		} else {
-			ticker = int(_t)
-		}
-	}
-	return nil
+	crawlCmd.Flags().IntVarP(&config.Crawl.Ticker, "ticker", "t", 0, "扫描间隔时间")
+	viper.BindPFlag("crawl.ticker", crawlCmd.Flags().Lookup("ticker"))
 }

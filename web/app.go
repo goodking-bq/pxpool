@@ -13,15 +13,15 @@ import (
 type WebApp struct {
 	App     *iris.Application
 	Storage storage.Storager
-	secret  string
+	config  *models.Config
 	logger  *logrus.Logger
 }
 
-func NewApp(storage storage.Storager, secret string, logger *logrus.Logger) *WebApp {
+func NewApp(config *models.Config, storage storage.Storager, logger *logrus.Logger) *WebApp {
 	return &WebApp{
 		App:     iris.New(),
 		Storage: storage,
-		secret:  secret,
+		config:  config,
 		logger:  logger,
 	}
 }
