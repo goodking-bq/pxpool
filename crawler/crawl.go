@@ -1,9 +1,10 @@
 package crawler
 
 import (
-	"log"
 	"pxpool/models"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/spf13/cobra"
 )
@@ -23,14 +24,16 @@ type Crawl struct {
 	DataChan   chan *models.Proxy // 数据交换用
 	ExitSignal chan bool          // 退出信号
 	Spiders    map[string]*Spider
+	logger     *logrus.Logger
 }
 
 // NewCrawl 创建Crawl
-func NewCrawl() *Crawl {
+func NewCrawl(logger *logrus.Logger) *Crawl {
 	return &Crawl{
 		Spiders:    make(map[string]*Spider),
 		DataChan:   make(chan *models.Proxy),
 		ExitSignal: make(chan bool),
+		logger:     logger,
 	}
 }
 
@@ -65,7 +68,7 @@ func (cm *Crawl) Start() {
 
 // StartTicker 开始爬虫循环跑
 func (cm *Crawl) StartTicker(t int) {
-	log.Println("爬虫60秒后再次运行")
+	cm.logger.Debugln("爬虫60秒后再次运行")
 	crawlTicker := time.NewTicker(time.Second * time.Duration(t))
 	go func(ticker *time.Ticker) {
 		defer ticker.Stop()
@@ -84,9 +87,9 @@ func (cm *Crawl) StartTicker(t int) {
 }
 
 // StartAndTicker 开始并定时执行
-func (cm *Crawl) StartAndTicker() {
+func (cm *Crawl) StartAndTicker(t int) {
 	cm.Crawl()
-	cm.StartTicker()
+	cm.StartTicker(t)
 }
 
 // Command 爬虫命令
