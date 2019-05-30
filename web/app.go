@@ -50,22 +50,18 @@ func (app *WebApp) Run() {
 		app.logger.WithField("proxy", proxy.URL()).Infoln("保存成功")
 	})
 
-	// home := app.App.Party("/")
-	// home.Get("search",func(ctx iris.Context){
-	// 	r.ParseForm()
-	// 	if len(r.Form["ip"]) > 0 {
-	// 		ip := r.Form.Get("ip")
-	// 		p := api.storage.GetProxysByHost(ip)
-	// 		for _, px := range p {
-	// 			w.Write([]byte(px.URL() + "\n"))
-	// 		}
-	// 		if len(p) == 0 {
-	// 			w.Write([]byte("proxy not exist"))
-	// 		}
-	// 	} else {
-	// 		w.Write([]byte("you need give me a ip"))
-	// 	}
-	// })
+	home := app.App.Party("/")
+	home.Get("search", func(ctx iris.Context) {
+		ip := ctx.URLParam("ip")
+		p := app.Storage.GetProxysByHost(ip)
+		if len(p) == 0 {
+			ctx.Write([]byte("proxy not exist"))
+		} else {
+			for _, px := range p {
+				ctx.Write([]byte(px.URL() + "\n"))
+			}
+		}
+	})
 
 	app.App.Run(iris.Addr(":3000"))
 }

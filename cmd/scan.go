@@ -128,7 +128,7 @@ func init() {
 	scanCmd.Flags().StringVar(&ports, "ports", "80", "需要扫描的端口")
 	scanCmd.Flags().StringVar(&cidrOne, "cidr", "", "给定cidr作为扫描目标")
 	scanCmd.Flags().Int64VarP(&maxConcurrency, "maxconcurrency", "C", 0, "扫描并发数量")
-	scanCmd.Flags().StringVarP(&postURL, "post", "p", "", "扫描并发数量")
+	scanCmd.Flags().StringVarP(&postURL, "post", "p", "", "结果提交地址")
 	initStorager()
 }
 

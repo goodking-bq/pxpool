@@ -64,9 +64,9 @@ func (cm *Crawl) Start() {
 }
 
 // StartTicker 开始爬虫循环跑
-func (cm *Crawl) StartTicker() {
+func (cm *Crawl) StartTicker(t int) {
 	log.Println("爬虫60秒后再次运行")
-	crawlTicker := time.NewTicker(time.Second * 60)
+	crawlTicker := time.NewTicker(time.Second * time.Duration(t))
 	go func(ticker *time.Ticker) {
 		defer ticker.Stop()
 		for {

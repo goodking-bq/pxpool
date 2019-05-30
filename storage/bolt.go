@@ -39,7 +39,8 @@ func GetBoltStorage(path string) *Bolt {
 
 // AddOrUpdateProxy 添加或更新
 func (b *Bolt) AddOrUpdateProxy(p *models.Proxy) error {
-	err := b.db.Update(func(tx *bolt.Tx) error {
+	isNew := false
+	err := b.db.Batch(func(tx *bolt.Tx) error {
 		proxy := b.GetProxyByproxy(p)
 		if proxy == nil { //没有新建
 			bProxys, err := tx.CreateBucketIfNotExists([]byte("proxys"))
@@ -54,13 +55,18 @@ func (b *Bolt) AddOrUpdateProxy(p *models.Proxy) error {
 			proxyKey := proxyID + "|" + p.Host + ":" + p.Port
 			bProxy, err := bProxys.CreateBucketIfNotExists([]byte(proxyKey))
 			p.ID = proxyID
-			b.IncProxyCounter()
-			return b.ProxyToBucket(p, bProxy)
+			err = b.ProxyToBucket(p, bProxy)
+			isNew = true
+			return err
+
 		}
 		return nil
 	})
 	if err != nil {
 		return err
+	}
+	if isNew == true {
+		b.IncProxyCounter() // 不能放update里面
 	}
 	return nil
 }
@@ -68,7 +74,6 @@ func (b *Bolt) AddOrUpdateProxy(p *models.Proxy) error {
 // GetProxysByHost 根据host查找proxy
 func (b *Bolt) GetProxysByHost(host string) []*models.Proxy {
 	var proxys []*models.Proxy
-	var has bool
 	if err := b.db.View(func(tx *bolt.Tx) error {
 		bProxys := tx.Bucket([]byte("proxys"))
 		if bProxys == nil {
@@ -93,10 +98,9 @@ func (b *Bolt) GetProxysByHost(host string) []*models.Proxy {
 	}); err != nil {
 		return nil
 	}
-	if has == true {
-		return proxys
-	}
-	return nil
+
+	return proxys
+
 }
 
 // GetProxyByproxy xxx
@@ -170,6 +174,7 @@ func (b *Bolt) RandomProxy() *models.Proxy {
 			return nil
 		}
 		n := rand.Int63n(l)
+		n++
 		nString := strconv.FormatInt(n, 10) + "|"
 		search := []byte(nString)
 		c := bProxys.Cursor()

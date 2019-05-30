@@ -15,9 +15,17 @@
 package cmd
 
 import (
-	"fmt"
+	"pxpool/crawler"
+	"pxpool/models"
+	"pxpool/storage"
+	"strconv"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+)
+
+var (
+	ticker int
 )
 
 // crawlCmd represents the crawl command
@@ -26,20 +34,47 @@ var crawlCmd = &cobra.Command{
 	Short: "启动网络爬虫",
 	Long:  `运行爬虫程序.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("crawl called")
+		cManager := crawler.NewDefaultCrawl(models.ProxyChan)
+		if ticker > 0 {
+			cManager.StartAndTicker(ticker)
+		}
+		if postURL == "" {
+			storage.StartStorage(gCtx, &storager, models.ProxyChan)
+		} else {
+			for {
+				select {
+				case proxy := <-models.ProxyChan:
+					go PostProxy(proxy, postURL)
+				case <-gCtx.Done():
+					close(models.ProxyChan)
+				}
+			}
+		}
+		cManager.ExitSignal <- true
+		defer gCancal()
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(crawlCmd)
+	crawlCmd.PreRunE = crawlPreRunE
+	scanCmd.Flags().StringVarP(&postURL, "post", "p", "", "结果提交地址")
+	scanCmd.Flags().IntVarP(&ticker, "ticker", "t", 0, "扫描间隔时间")
+	initStorager()
+}
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// crawlCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// crawlCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+func crawlPreRunE(cmd *cobra.Command, args []string) error {
+	if postURL == "" {
+		postURL = viper.GetStringMapString("crawl")["post"]
+	}
+	if ticker == 0 {
+		ts := viper.GetStringMapString("crawl")["ticker"]
+		_t, err := strconv.ParseInt(ts, 10, 0)
+		if err != nil {
+			ticker = 0
+		} else {
+			ticker = int(_t)
+		}
+	}
+	return nil
 }
