@@ -4,13 +4,7 @@ bolt:
 scanner:
   file: "D:\\go-program\\src\\pxpool\\ips.txt"
   maxconcurrency: 100
-  ports:
-    - 80
-    - 8080
-    - 3128
-    - 8081
-    - 9080
-    - 10808
+  ports: "80,8080,3128,8081,9080,10808"
 #  post: "http://localhost:3000/api/proxy"
 web:
   port: 3001

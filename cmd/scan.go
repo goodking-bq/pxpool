@@ -35,17 +35,29 @@ func PostProxy(proxy *models.Proxy, urlStr string) {
 	logger.WithFields(logrus.Fields{"proxy": proxy.URL()}).Errorln("代理提交成功！")
 }
 
+<<<<<<< HEAD
 func executeScan(cmd *cobra.Command, args []string) {
 	scanner := scanner.NewScanner(config, logger)
 	go scanner.MakeAddress()
 	go scanner.Scan(gCtx)
 	if config.Post == "" {
+=======
+func ExecuteScan(cmd *cobra.Command, args []string) {
+	scanner := scanner.NewScanner(config, logger)
+	go scanner.MakeAddress()
+	go scanner.Scan(gCtx)
+	if config.Url == "" {
+>>>>>>> 12705402ea938ddcec3ba4c24d6908997905953d
 		storage.StartStorage(gCtx, &storager, models.ProxyChan)
 	} else {
 		for {
 			select {
 			case proxy := <-models.ProxyChan:
+<<<<<<< HEAD
 				go PostProxy(proxy, config.Post)
+=======
+				go PostProxy(proxy, config.Url)
+>>>>>>> 12705402ea938ddcec3ba4c24d6908997905953d
 			case <-gCtx.Done():
 				close(models.ProxyChan)
 			}
