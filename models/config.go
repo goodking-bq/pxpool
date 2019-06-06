@@ -2,7 +2,10 @@ package models
 
 import (
 	"io/ioutil"
+	"strconv"
+	"strings"
 
+	"github.com/spf13/viper"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v2"
 )
@@ -19,6 +22,16 @@ type scanner struct {
 	Cidr           string
 	MaxConcurrency int
 	Ports          []int
+	PortString     string
+}
+
+type logger struct {
+	File  string
+	Level string
+}
+
+type crawl struct {
+	Ticker int
 }
 
 // Config 配置
@@ -27,6 +40,10 @@ type Config struct {
 	Bolt        bolt
 	Web         web
 	Scanner     scanner
+	Crawl       crawl
+	Log         logger
+	Post        string
+	Secret      string
 }
 
 // DefaultConfig 默认配置
@@ -72,4 +89,26 @@ func (c *Config) UnmarshalCtx(ctx *cli.Context) error {
 		c.Bolt.DataPath = dataPath
 	}
 	return nil
+}
+
+// UnmarshalViper 从viper中加载配置
+func (c *Config) UnmarshalViper() {
+	c.StorageType = viper.GetString("storagetype")
+	c.Log.File = viper.GetString("log")
+	c.Log.Level = viper.GetString("loglevel")
+	c.Post = viper.GetString("url")
+	c.Secret = viper.GetString("secret")
+	c.Crawl.Ticker = viper.GetInt("ticker")
+	c.Scanner.Cidr = viper.GetString("cidr")
+	c.Scanner.File = viper.GetString("file")
+	c.Scanner.PortString = viper.GetString("ports")
+	var ports []int
+	for _, port := range strings.Split(c.Scanner.PortString, ",") {
+		i, _ := strconv.Atoi(port)
+		ports = append(ports, i)
+	}
+	c.Scanner.Ports = ports
+	c.Scanner.MaxConcurrency = viper.GetInt("maxconcurrency")
+	c.Web.Bind = viper.GetString("bind")
+	c.Web.Port = viper.GetInt("port")
 }

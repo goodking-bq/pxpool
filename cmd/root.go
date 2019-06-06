@@ -18,6 +18,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"pxpool/models"
 	"pxpool/storage"
 	"strings"
 
@@ -30,12 +31,10 @@ import (
 
 var (
 	cfgFile       string
-	logFile       string
-	logLevel      string
-	storageType   string
 	storager      storage.Storager
 	logger        = logrus.New()
 	gCtx, gCancal = context.WithCancel(context.Background())
+	config        = models.DefaultConfig()
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -64,14 +63,24 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	cobra.OnInitialize(initLog)
+	cobra.OnInitialize(config.UnmarshalViper, initLog)
+	cobra.OnInitialize(initStorager)
+
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "配置文件 (默认是 config.yaml)")
-	rootCmd.PersistentFlags().StringVarP(&storageType, "storageType", "t", "bolt", "数据库存储类型 (默认是 bolt)")
-	rootCmd.PersistentFlags().StringVar(&logFile, "log", "", "日志文件路径 (默认是 os.stdout)")
-	rootCmd.PersistentFlags().StringVar(&logLevel, "loglevel", "", "日志级别 (默认是 info)")
+	rootCmd.PersistentFlags().StringVar(&(config.StorageType), "storagetype", "bolt", "数据库存储类型 (默认是 bolt)")
+	viper.BindPFlag("storagetype", rootCmd.PersistentFlags().Lookup("storagetype"))
+	rootCmd.PersistentFlags().StringVar(&config.Log.File, "log", "", "日志文件路径 (默认是 os.stdout)")
+	viper.BindPFlag("log", rootCmd.PersistentFlags().Lookup("log"))
+	rootCmd.PersistentFlags().StringVar(&config.Log.Level, "loglevel", "", "日志级别 (默认是 info)")
+	viper.BindPFlag("loglevel", rootCmd.PersistentFlags().Lookup("loglevel"))
+	rootCmd.PersistentFlags().StringVarP(&config.Post, "url", "u", "", "扫描或爬虫结果提交地址，默认保存到本地数据库。")
+	viper.BindPFlag("url", rootCmd.PersistentFlags().Lookup("url"))
+	rootCmd.PersistentFlags().StringVarP(&config.Secret, "secret", "s", "", "secret验证")
+	viper.BindPFlag("secret", rootCmd.PersistentFlags().Lookup("secret"))
+
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -106,13 +115,10 @@ func initConfig() {
 }
 
 func initStorager() {
-	if postURL != "" {
-		return
-	}
-	if storageType == "" {
-		storageType = viper.GetString("storagetype")
-	}
-	switch strings.ToLower(storageType) {
+	// if config.StorageType == "" {
+	// 	storageType = viper.GetString("storagetype")
+	// }
+	switch strings.ToLower(config.StorageType) {
 	case "bolt":
 		bolt := storage.GetBoltStorage(viper.GetStringMapString("bolt")["datapath"])
 		storager = bolt
@@ -122,16 +128,7 @@ func initStorager() {
 }
 
 func initLog() {
-	if logFile == "" {
-		logFile = viper.GetString("log")
-	}
-	if logLevel == "" {
-		logLevel = viper.GetString("logLevel")
-	}
-	if logLevel == "" {
-		logLevel = "info"
-	}
-	switch logLevel {
+	switch strings.ToLower(config.Log.Level) {
 	case "debug":
 		logger.SetLevel(logrus.DebugLevel)
 		break
@@ -151,9 +148,9 @@ func initLog() {
 		logger.SetLevel(logrus.FatalLevel)
 		break
 	}
-	if logFile != "" {
+	if config.Log.File != "" {
 		pathMap := lfshook.PathMap{
-			logrus.DebugLevel: logFile,
+			logrus.DebugLevel: config.Log.File,
 			//logrus.InfoLevel:  logFile,
 			//logrus.ErrorLevel: "./error.log",
 		}

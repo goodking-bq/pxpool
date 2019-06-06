@@ -1,8 +1,6 @@
 storagetype: bolt
 bolt:
   datapath: "D:\\go-program\\src\\pxpool"
-crawl:
-  post: "http://localhost:3000/api/proxy"
 scanner:
   file: "D:\\go-program\\src\\pxpool\\ips.txt"
   maxconcurrency: 100
@@ -15,6 +13,9 @@ scanner:
     - 10808
 #  post: "http://localhost:3000/api/proxy"
 web:
-  port: 3000
-log: "D:\\go-program\\src\\pxpool\\pxpool.log"
-loglevel: "info"
+  port: 3001
+log: 
+  file: "D:\\go-program-private\\src\\pxpool\\pxpool.log"
+  level: "info"
+post: "http://localhost:3000/api/proxy"
+secret: "sdfasfas"

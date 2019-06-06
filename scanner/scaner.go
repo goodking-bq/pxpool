@@ -3,10 +3,12 @@ package scanner
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"os"
 	"pxpool/models"
 	"sync"
 	"time"
@@ -23,15 +25,17 @@ type Scanner struct {
 	Chan      chan Address
 	Wg        sync.WaitGroup
 	logger    *logrus.Logger
+	config    *models.Config
 }
 
 // NewScanner xxxx
-func NewScanner(mc int64, logger *logrus.Logger) *Scanner {
+func NewScanner(config *models.Config, logger *logrus.Logger) *Scanner {
 	return &Scanner{
-		Chan:   make(chan Address, mc),
+		Chan:   make(chan Address, config.Scanner.MaxConcurrency),
 		Wg:     sync.WaitGroup{},
 		logger: logger,
-		DoChan: make(chan bool, mc),
+		DoChan: make(chan bool, config.Scanner.MaxConcurrency),
+		config: config,
 	}
 }
 
@@ -72,7 +76,7 @@ func (scanner *Scanner) ScanIP(ipc Address, dataChan chan *models.Proxy) {
 	scanner.logger.Debugf("%s:%d open ,and is not  proxy \n", ipc.IP, ipc.Port)
 }
 
-// ScanCidr 扫描ip段
+// FromCidr 扫描ip段
 func (scanner *Scanner) FromCidr(cidr []byte, dataChan chan *models.Proxy) {
 	ads := NewAddresses()
 	err := ads.UnmarshalCidrText(cidr)
@@ -119,34 +123,57 @@ func (scanner *Scanner) FromFile(file io.Reader, dataChan chan *models.Proxy) er
 	return nil
 }
 
-// Scan 开始扫描
-func (scanner *Scanner) Scan(ctx context.Context, maxc int64, dataChan chan *models.Proxy) error {
-	ticker := time.NewTicker(time.Second * 10)
-	var lastTick int64
-
-	for {
-		for scanner.Doing.Get() < maxc {
-			select {
-			case <-ticker.C:
-				scanner.logger.Infof("ip数：%d,正在执行: %d,已完成: %d\n", scanner.IPcount.Get(), scanner.Doing.Get(), scanner.ScanCount.Get())
-				if scanner.ScanCount.Get() != lastTick {
-					lastTick = scanner.ScanCount.Get()
-				} else {
-					scanner.logger.Fatalln("扫描意外停止停止。")
-				}
-			case address := <-scanner.Chan:
-				scanner.Wg.Add(1)
-				go scanner.ScanIP(address, models.ProxyChan)
-				scanner.Doing.Inc(1)
-			case <-ctx.Done():
-				close(models.ProxyChan)
-				break
-			}
+// MakeAddress xxx
+func (scanner *Scanner) MakeAddress() error {
+	if scanner.config.Scanner.File != "" {
+		file, err := os.Open(scanner.config.Scanner.File)
+		if err != nil {
+			scanner.logger.Errorf("文件 %s 不存在", scanner.config.Scanner.File)
+			return err
 		}
-		scanner.Wg.Wait()
+		defer file.Close()
+		go scanner.FromFile(file, models.ProxyChan)
+	} else if scanner.config.Scanner.Cidr != "" {
+		go scanner.FromCidr([]byte(scanner.config.Scanner.Cidr), models.ProxyChan)
+	} else {
+		scanner.logger.Errorln("未给扫描目标")
+		return errors.New("未给扫描目标")
+	}
+	return nil
+}
+
+// Scan scan
+func (scanner *Scanner) Scan(ctx context.Context) error {
+	ticker := time.NewTicker(time.Second * 60)
+	var lastTick int64
+	for i := int64(0); i < int64(scanner.config.Scanner.MaxConcurrency); i++ {
+		scanner.DoChan <- true
+	}
+	for {
+		//for scanner.Doing.Get() < maxConcurrency {
+		select {
+		case <-ticker.C:
+			scanner.logger.Infof("ip数：%d,正在执行: %d,已完成: %d\n", scanner.IPcount.Get(), scanner.Doing.Get(), scanner.ScanCount.Get())
+			if scanner.ScanCount.Get() != lastTick {
+				lastTick = scanner.ScanCount.Get()
+			} else {
+				scanner.logger.Fatalln("扫描停止。")
+			}
+		case address := <-scanner.Chan:
+			<-scanner.DoChan
+			scanner.Wg.Add(1)
+			go scanner.ScanIP(address, models.ProxyChan)
+			scanner.Doing.Inc(1)
+
+		case <-ctx.Done():
+			close(models.ProxyChan)
+			break
+		}
+		//}
 	}
 }
 
+// Done done one
 func (scanner *Scanner) Done(addr Address) {
 	scanner.ScanCount.Inc(1)
 	scanner.DoChan <- true
